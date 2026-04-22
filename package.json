@@ -32,7 +32,10 @@
 		"vitest-browser-svelte": "^2.1.0"
 	},
 	"dependencies": {
+		"@libsql/client": "^0.17.2",
 		"@modelcontextprotocol/sdk": "^1.29.0",
+		"drizzle-orm": "^0.45.2",
+		"ulid": "^3.0.2",
 		"yaml": "^2.8.3"
 	}
 }
