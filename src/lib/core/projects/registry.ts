@@ -20,11 +20,12 @@ export interface UpdateRegistryEntryInput {
 export async function createRegistryEntry(
 	db: Database,
 	name: string,
-	path: string
+	path: string,
+	id?: string
 ): Promise<RegistryEntry> {
 	const now = new Date().toISOString();
 	const entry: RegistryEntry = {
-		id: generateId(),
+		id: id ?? generateId(),
 		name,
 		path,
 		config: null,
