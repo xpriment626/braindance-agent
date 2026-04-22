@@ -33,6 +33,14 @@ export interface BraindanceConfig {
 	};
 }
 
-export type PartialBraindanceConfig = {
-	[K in keyof BraindanceConfig]?: Partial<BraindanceConfig[K]>;
-};
+export interface PartialBraindanceConfig {
+	providers?: Record<string, ProviderConfig>;
+	mcp_servers?: Record<string, McpServerConfig>;
+	channels?: Record<string, ChannelConfig>;
+	capabilities?: {
+		discover?: Partial<CapabilityConfig>;
+		audit?: Partial<CapabilityConfig>;
+		strategy?: Partial<CapabilityConfig>;
+		writer?: Partial<CapabilityConfig>;
+	};
+}
