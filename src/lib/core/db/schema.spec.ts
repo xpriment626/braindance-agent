@@ -7,8 +7,7 @@ import {
 	sources,
 	workflowRuns,
 	agentRuns,
-	briefings,
-	drafts,
+	discoveryReports,
 	signals,
 	initProjectDb
 } from './schema';
@@ -41,7 +40,7 @@ describe('initRegistryDb', () => {
 });
 
 describe('initProjectDb', () => {
-	it('creates all 8 project tables', async () => {
+	it('creates all 7 project tables', async () => {
 		const db = createDb(':memory:');
 		await initProjectDb(db);
 
@@ -51,8 +50,7 @@ describe('initProjectDb', () => {
 		expect(await db.select().from(sources)).toEqual([]);
 		expect(await db.select().from(workflowRuns)).toEqual([]);
 		expect(await db.select().from(agentRuns)).toEqual([]);
-		expect(await db.select().from(briefings)).toEqual([]);
-		expect(await db.select().from(drafts)).toEqual([]);
+		expect(await db.select().from(discoveryReports)).toEqual([]);
 		expect(await db.select().from(signals)).toEqual([]);
 	});
 

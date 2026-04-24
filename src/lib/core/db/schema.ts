@@ -68,31 +68,17 @@ export const agentRuns = sqliteTable('agent_runs', {
 	error: text('error')
 });
 
-// ─── Briefings ────────────────────────────────────────────
-export const briefings = sqliteTable('briefings', {
+// ─── Discovery Reports ────────────────────────────────────
+export const discoveryReports = sqliteTable('discovery_reports', {
 	id: text('id').primaryKey(),
 	topicId: text('topic_id').notNull(),
 	workflowRunId: text('workflow_run_id').notNull(),
 	status: text('status').notNull(), // "pending" | "reviewed" | "dismissed"
 	summary: text('summary'),
 	newSources: text('new_sources'), // JSON discovered sources array
-	corpusHealth: text('corpus_health'), // JSON health report
+	auditFindings: text('audit_findings'), // JSON audit output
 	createdAt: text('created_at').notNull(),
 	reviewedAt: text('reviewed_at')
-});
-
-// ─── Drafts ───────────────────────────────────────────────
-export const drafts = sqliteTable('drafts', {
-	id: text('id').primaryKey(),
-	topicId: text('topic_id').notNull(),
-	agentRunId: text('agent_run_id').notNull(),
-	formatTemplate: text('format_template').notNull(),
-	editorialBrief: text('editorial_brief'), // JSON format-agnostic intent
-	renderedContent: text('rendered_content'),
-	revisionHistory: text('revision_history'), // JSON revision rounds
-	status: text('status').notNull(), // "staged" | "accepted" | "discarded"
-	createdAt: text('created_at').notNull(),
-	updatedAt: text('updated_at').notNull()
 });
 
 // ─── Signals ──────────────────────────────────────────────
@@ -174,29 +160,16 @@ export async function initProjectDb(db: Database): Promise<void> {
 		error TEXT
 	)`);
 
-	await db.run(sql`CREATE TABLE IF NOT EXISTS briefings (
+	await db.run(sql`CREATE TABLE IF NOT EXISTS discovery_reports (
 		id TEXT PRIMARY KEY,
 		topic_id TEXT NOT NULL,
 		workflow_run_id TEXT NOT NULL,
 		status TEXT NOT NULL,
 		summary TEXT,
 		new_sources TEXT,
-		corpus_health TEXT,
+		audit_findings TEXT,
 		created_at TEXT NOT NULL,
 		reviewed_at TEXT
-	)`);
-
-	await db.run(sql`CREATE TABLE IF NOT EXISTS drafts (
-		id TEXT PRIMARY KEY,
-		topic_id TEXT NOT NULL,
-		agent_run_id TEXT NOT NULL,
-		format_template TEXT NOT NULL,
-		editorial_brief TEXT,
-		rendered_content TEXT,
-		revision_history TEXT,
-		status TEXT NOT NULL,
-		created_at TEXT NOT NULL,
-		updated_at TEXT NOT NULL
 	)`);
 
 	await db.run(sql`CREATE TABLE IF NOT EXISTS signals (
