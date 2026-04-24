@@ -2,13 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createDb, type Database } from '../../db/connection';
 import { initRegistryDb } from '../../db/registry-schema';
 import { createRegistryEntry } from '../../projects/registry';
-import { openRegistry, createProject } from '../../projects/project';
+import { openRegistry, createProject, openProject } from '../../projects/project';
 import { createTopic } from '../../knowledge/topics';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createSeed } from '../../knowledge/seeds';
+import { createSource } from '../../knowledge/sources';
+import { generateId } from '../../db/id';
 import { listProjectsHandler } from './listProjects';
 import { listTopicsHandler } from './listTopics';
+import { readKbHandler } from './readKb';
 
 describe('list_projects tool', () => {
 	let registryDb: Database;
@@ -92,5 +96,116 @@ describe('list_topics tool', () => {
 			projectId: project.id
 		});
 		expect(result[0].narrative_threads).toEqual([]);
+	});
+});
+
+describe('read_kb tool', () => {
+	let dataDir: string;
+	let registryDb: Database;
+	let projectId: string;
+	let topicId: string;
+
+	beforeEach(async () => {
+		dataDir = await mkdtemp(join(tmpdir(), 'bd-mcp-readkb-'));
+		registryDb = await openRegistry(dataDir);
+		const project = await createProject(dataDir, registryDb, 'Test');
+		projectId = project.id;
+		const topic = await createTopic(project.db, { name: 'T1' });
+		topicId = topic.id;
+
+		const seed = await createSeed(project.db, {
+			topicId,
+			type: 'freeform',
+			origin: 'user',
+			inputCount: 1
+		});
+		await createSource(project.db, {
+			id: generateId(),
+			seedId: seed.id,
+			topicId,
+			title: 'Long Article',
+			type: 'text',
+			content: 'A'.repeat(2000),
+			originalFormat: 'text/plain',
+			provenance: 'user paste'
+		});
+	});
+
+	afterEach(async () => {
+		await rm(dataDir, { recursive: true, force: true });
+	});
+
+	it('returns full content by default', async () => {
+		const result = await readKbHandler({ dataDir, registryDb, projectId });
+		expect(result).toHaveLength(1);
+		expect(result[0].content?.length).toBe(2000);
+	});
+
+	it('truncates to ~300 chars in summary mode', async () => {
+		const result = await readKbHandler({
+			dataDir,
+			registryDb,
+			projectId,
+			contentMode: 'summary'
+		});
+		expect(result[0].content?.length).toBeLessThanOrEqual(300);
+	});
+
+	it('omits content entirely in none mode', async () => {
+		const result = await readKbHandler({
+			dataDir,
+			registryDb,
+			projectId,
+			contentMode: 'none'
+		});
+		expect(result[0].content).toBeUndefined();
+		expect(result[0].title).toBe('Long Article');
+	});
+
+	it('filters by topic_id when provided', async () => {
+		const scoped = await readKbHandler({ dataDir, registryDb, projectId, topicId });
+		expect(scoped).toHaveLength(1);
+		const empty = await readKbHandler({
+			dataDir,
+			registryDb,
+			projectId,
+			topicId: 'no-such-topic'
+		});
+		expect(empty).toHaveLength(0);
+	});
+
+	it('respects limit param', async () => {
+		const project = await openProject(dataDir, registryDb, projectId);
+		if (!project) throw new Error('project vanished');
+		for (let i = 0; i < 4; i++) {
+			const seed = await createSeed(project.db, {
+				topicId,
+				type: 'freeform',
+				origin: 'user',
+				inputCount: 1
+			});
+			await createSource(project.db, {
+				id: generateId(),
+				seedId: seed.id,
+				topicId,
+				title: `Article ${i}`,
+				type: 'text',
+				content: 'x',
+				originalFormat: 'text/plain'
+			});
+		}
+		const limited = await readKbHandler({
+			dataDir,
+			registryDb,
+			projectId,
+			limit: 2
+		});
+		expect(limited).toHaveLength(2);
+	});
+
+	it('throws on unknown project_id', async () => {
+		await expect(
+			readKbHandler({ dataDir, registryDb, projectId: 'nope' })
+		).rejects.toThrow(/project not found/i);
 	});
 });
