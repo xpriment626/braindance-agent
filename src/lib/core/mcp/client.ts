@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { McpServerConfig } from '../config/types';
 
@@ -43,7 +44,6 @@ export async function openMcpClient(opts: OpenOptions): Promise<ConnectedMcpClie
 }
 
 // Factory: open an MCP client from a config entry (stdio-spawned or HTTP-backed).
-// HTTP transport is deferred to slice 2 when DeepWiki lands.
 export async function openFromConfig(
 	name: string,
 	config: McpServerConfig
@@ -57,9 +57,8 @@ export async function openFromConfig(
 		return openMcpClient({ transport, name });
 	}
 	if (config.url) {
-		throw new Error(
-			`MCP server "${name}" is HTTP-backed; HTTP transport will land in slice 2 (DeepWiki integration)`
-		);
+		const transport = new StreamableHTTPClientTransport(new URL(config.url));
+		return openMcpClient({ transport, name });
 	}
 	throw new Error(`MCP server "${name}" has neither command nor url`);
 }
