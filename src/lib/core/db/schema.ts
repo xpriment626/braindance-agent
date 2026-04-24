@@ -98,13 +98,16 @@ export const drafts = sqliteTable('drafts', {
 // ─── Signals ──────────────────────────────────────────────
 export const signals = sqliteTable('signals', {
 	id: text('id').primaryKey(),
-	targetType: text('target_type').notNull(), // "source" | "briefing" | "draft"
+	topicId: text('topic_id').notNull(),
+	targetType: text('target_type').notNull(), // "source" | "thread"
 	targetId: text('target_id').notNull(),
-	signalType: text('signal_type').notNull(), // "fresh" | "contested" | "stale" | "retracted"
+	signalType: text('signal_type').notNull(), // "fresh" | "contested" | "stale" | "retracted" | "gap" | "consolidation"
 	reason: text('reason'),
-	raisedBy: text('raised_by').notNull(), // "journalist" | "editorial" | "user"
-	resolved: integer('resolved').notNull().default(0), // 0 = active, 1 = resolved
-	createdAt: text('created_at').notNull()
+	raisedBy: text('raised_by').notNull(), // "audit" | "user"
+	status: text('status').notNull(), // "pending" | "approved" | "applied" | "dismissed"
+	metadata: text('metadata'), // JSON signal-type-specific data
+	createdAt: text('created_at').notNull(),
+	resolvedAt: text('resolved_at')
 });
 
 // ─── Schema initialization ───────────────────────────────
@@ -198,12 +201,15 @@ export async function initProjectDb(db: Database): Promise<void> {
 
 	await db.run(sql`CREATE TABLE IF NOT EXISTS signals (
 		id TEXT PRIMARY KEY,
+		topic_id TEXT NOT NULL,
 		target_type TEXT NOT NULL,
 		target_id TEXT NOT NULL,
 		signal_type TEXT NOT NULL,
 		reason TEXT,
 		raised_by TEXT NOT NULL,
-		resolved INTEGER NOT NULL DEFAULT 0,
-		created_at TEXT NOT NULL
+		status TEXT NOT NULL,
+		metadata TEXT,
+		created_at TEXT NOT NULL,
+		resolved_at TEXT
 	)`);
 }
