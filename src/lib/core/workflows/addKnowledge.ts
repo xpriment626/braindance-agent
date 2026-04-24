@@ -1,7 +1,7 @@
 import type { Database } from '../db/connection';
 import type { LLMProvider } from '../agents/llm';
 import type { Channel } from '../channels/types';
-import type { TopicContext, CorpusSource, AuditOutput, AuditSignal } from '../agents/types';
+import type { TopicContext, CorpusSource } from '../agents/types';
 import { getTopic } from '../knowledge/topics';
 import { listSourcesByTopic } from '../knowledge/sources';
 import { runDiscover } from '../agents/discover';
@@ -10,12 +10,12 @@ import {
 	createDiscoveryReport,
 	type DiscoveredSourceProposal
 } from '../knowledge/discovery-reports';
-import { createSignal } from '../knowledge/signals';
 import {
 	createWorkflowRun,
 	stageWorkflowRun,
 	failWorkflowRun
 } from './runs';
+import { persistAuditSignals } from './persistAuditSignals';
 import type { RunChannelOverride } from '../channels/resolve';
 
 export interface WorkflowConfig {
@@ -151,55 +151,3 @@ function buildCombinedSummary(searchSummary: string, auditSummary: string): stri
 	return `Discovery: ${searchSummary}\n\nAudit: ${auditSummary}`;
 }
 
-async function persistAuditSignals(
-	db: Database,
-	topicId: string,
-	audit: AuditOutput
-): Promise<void> {
-	for (const flag of audit.freshnessFlags) {
-		await createAuditSignal(db, topicId, flag);
-	}
-	for (const flag of audit.contradictions) {
-		await createAuditSignal(db, topicId, flag);
-	}
-	for (const gap of audit.gapAnalysis) {
-		if (gap.coverage === 'strong') continue; // strong coverage isn't actionable
-		await createSignal(db, {
-			topicId,
-			targetType: 'thread',
-			targetId: topicId,
-			signalType: 'gap',
-			reason: gap.notes,
-			raisedBy: 'audit',
-			metadata: { thread: gap.thread, coverage: gap.coverage }
-		});
-	}
-	for (const consolidation of audit.consolidationSuggestions) {
-		const [canonical, ...superseded] = consolidation.sourceIds;
-		if (!canonical) continue;
-		await createSignal(db, {
-			topicId,
-			targetType: 'source',
-			targetId: canonical,
-			signalType: 'consolidation',
-			reason: consolidation.reason,
-			raisedBy: 'audit',
-			metadata: { canonicalId: canonical, supersededIds: superseded }
-		});
-	}
-}
-
-async function createAuditSignal(
-	db: Database,
-	topicId: string,
-	flag: AuditSignal
-): Promise<void> {
-	await createSignal(db, {
-		topicId,
-		targetType: 'source',
-		targetId: flag.targetId,
-		signalType: flag.signalType,
-		reason: flag.reason,
-		raisedBy: 'audit'
-	});
-}
