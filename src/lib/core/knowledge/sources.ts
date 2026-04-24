@@ -62,3 +62,7 @@ export async function listSourcesByTopic(db: Database, topicId: string): Promise
 export async function listSourcesBySeed(db: Database, seedId: string): Promise<Source[]> {
 	return db.select().from(sources).where(eq(sources.seedId, seedId)) as Promise<Source[]>;
 }
+
+export async function deleteSource(db: Database, id: string): Promise<void> {
+	await db.delete(sources).where(eq(sources.id, id));
+}
