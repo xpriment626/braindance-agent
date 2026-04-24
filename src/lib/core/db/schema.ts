@@ -47,12 +47,13 @@ export const sources = sqliteTable('sources', {
 // ─── Workflow Runs ────────────────────────────────────────
 export const workflowRuns = sqliteTable('workflow_runs', {
 	id: text('id').primaryKey(),
-	type: text('type').notNull(), // "add_knowledge" | "create_content" | "create_content_expand"
+	type: text('type').notNull(), // "add_knowledge" | "audit_corpus" | "prune_corpus"
 	topicId: text('topic_id').notNull(),
 	status: text('status').notNull(), // "running" | "staged" | "completed" | "failed"
 	config: text('config'), // JSON workflow config
 	startedAt: text('started_at').notNull(),
-	completedAt: text('completed_at')
+	completedAt: text('completed_at'),
+	error: text('error')
 });
 
 // ─── Agent Runs ───────────────────────────────────────────
@@ -145,7 +146,8 @@ export async function initProjectDb(db: Database): Promise<void> {
 		status TEXT NOT NULL,
 		config TEXT,
 		started_at TEXT NOT NULL,
-		completed_at TEXT
+		completed_at TEXT,
+		error TEXT
 	)`);
 
 	await db.run(sql`CREATE TABLE IF NOT EXISTS agent_runs (
