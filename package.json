@@ -1,13 +1,24 @@
 {
-	"name": "braindance-agent",
-	"private": true,
+	"name": "braindance",
 	"version": "0.0.1",
+	"description": "Knowledge-first curation agent with an MCP server for Claude Desktop / Cursor / any MCP-aware client",
 	"type": "module",
+	"bin": {
+		"braindance": "./dist/cli.js"
+	},
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
+		"build:cli": "bun build src/cli.ts --target=node --outdir=dist --packages=external && chmod +x dist/cli.js",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
+		"prepack": "bun run build:cli",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test:unit": "vitest",
