@@ -83,7 +83,7 @@ describe('project registry', () => {
 
 		it('writes config as a JSON string', async () => {
 			const created = await createRegistryEntry(db, 'Test', 'projects/x');
-			const overrides = { capabilities: { writer: { model: 'haiku' } } };
+			const overrides = { capabilities: { prune: { model: 'haiku' } } };
 			await updateRegistryEntry(db, created.id, { config: JSON.stringify(overrides) });
 			const found = await getRegistryEntry(db, created.id);
 			expect(found!.config).toBe(JSON.stringify(overrides));

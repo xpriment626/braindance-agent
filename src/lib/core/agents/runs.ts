@@ -3,7 +3,7 @@ import { agentRuns } from '../db/schema';
 import { generateId } from '../db/id';
 import type { Database } from '../db/connection';
 
-export type AgentType = 'discover' | 'audit' | 'strategy' | 'writer';
+export type AgentType = 'discover' | 'audit' | 'prune';
 export type AgentRunStatus = 'running' | 'completed' | 'failed';
 
 export interface AgentRun {

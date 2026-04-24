@@ -28,8 +28,7 @@ export interface BraindanceConfig {
 	capabilities: {
 		discover: CapabilityConfig;
 		audit: CapabilityConfig;
-		strategy: CapabilityConfig;
-		writer: CapabilityConfig;
+		prune: CapabilityConfig;
 	};
 }
 
@@ -40,7 +39,6 @@ export interface PartialBraindanceConfig {
 	capabilities?: {
 		discover?: Partial<CapabilityConfig>;
 		audit?: Partial<CapabilityConfig>;
-		strategy?: Partial<CapabilityConfig>;
-		writer?: Partial<CapabilityConfig>;
+		prune?: Partial<CapabilityConfig>;
 	};
 }

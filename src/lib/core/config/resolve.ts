@@ -31,8 +31,7 @@ export function resolveConfig(input: ResolveInput): BraindanceConfig {
 		capabilities: {
 			discover: mergeCapability(layers, 'discover'),
 			audit: mergeCapability(layers, 'audit'),
-			strategy: mergeCapability(layers, 'strategy'),
-			writer: mergeCapability(layers, 'writer')
+			prune: mergeCapability(layers, 'prune')
 		}
 	};
 }

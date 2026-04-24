@@ -59,7 +59,7 @@ export const workflowRuns = sqliteTable('workflow_runs', {
 // ─── Agent Runs ───────────────────────────────────────────
 export const agentRuns = sqliteTable('agent_runs', {
 	id: text('id').primaryKey(),
-	agentType: text('agent_type').notNull(), // "discover" | "audit" | "strategy" | "writer"
+	agentType: text('agent_type').notNull(), // "discover" | "audit" | "prune"
 	topicId: text('topic_id').notNull(),
 	workflowRunId: text('workflow_run_id'), // nullable for free-composition runs
 	status: text('status').notNull(), // "running" | "completed" | "failed"

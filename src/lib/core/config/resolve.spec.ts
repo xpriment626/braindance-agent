@@ -42,17 +42,17 @@ describe('resolveConfig', () => {
 		const config = resolveConfig({
 			user: {
 				capabilities: {
-					writer: { provider: 'anthropic', model: 'claude-sonnet-4-6' }
+					prune: { provider: 'anthropic', model: 'claude-sonnet-4-6' }
 				}
 			},
 			run: {
 				capabilities: {
-					writer: { provider: 'openai', model: 'gpt-5-mini' }
+					prune: { provider: 'openai', model: 'gpt-5-mini' }
 				}
 			}
 		});
-		expect(config.capabilities.writer.provider).toBe('openai');
-		expect(config.capabilities.writer.model).toBe('gpt-5-mini');
+		expect(config.capabilities.prune.provider).toBe('openai');
+		expect(config.capabilities.prune.model).toBe('gpt-5-mini');
 	});
 
 	it('merges mcp_servers from user config', () => {

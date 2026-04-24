@@ -47,7 +47,7 @@ describe('agent runs', () => {
 
 		it('defaults workflowRunId and config to null', async () => {
 			const run = await createAgentRun(db, {
-				agentType: 'writer',
+				agentType: 'prune',
 				topicId
 			});
 			expect(run.workflowRunId).toBeNull();
@@ -70,7 +70,7 @@ describe('agent runs', () => {
 
 	describe('completeAgentRun', () => {
 		it('sets status to completed and stamps completedAt', async () => {
-			const created = await createAgentRun(db, { agentType: 'strategy', topicId });
+			const created = await createAgentRun(db, { agentType: 'prune', topicId });
 			await completeAgentRun(db, created.id);
 			const found = await getAgentRun(db, created.id);
 			expect(found!.status).toBe('completed');

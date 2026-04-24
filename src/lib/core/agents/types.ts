@@ -76,53 +76,6 @@ export interface AuditOutput {
 	summary: string;
 }
 
-// ─── Strategy Agent ──────────────────────────────────────
-
-export interface StrategyInput {
-	topic: TopicContext;
-	corpus: CorpusSource[];
-	journalistOutputs?: {
-		discoveredSources: DiscoveredSource[];
-		auditSummary: string;
-	};
-	pastAcceptedDrafts?: Array<{
-		formatTemplate: string;
-		renderedContent: string;
-		createdAt: string;
-	}>;
-}
-
-export interface EditorialIntent {
-	thesis: string;
-	argumentStructure: Array<{
-		point: string;
-		evidence: Array<{ sourceId: string; excerpt: string }>;
-	}>;
-	narrativeArc: string;
-	connections: string;
-}
-
-export interface StrategyOutput {
-	intent: EditorialIntent;
-	summary: string;
-}
-
-// ─── Writer Agent ────────────────────────────────────────
-
-export interface WriterInput {
-	intent: EditorialIntent;
-	template: {
-		name: string;
-		blocks: string[];
-		constraints: {
-			maxLength?: number;
-			tone?: string;
-			rules: string[];
-		};
-	};
-}
-
-export interface WriterOutput {
-	renderedContent: string;
-	formatTemplate: string;
-}
+// Prune agent I/O types live in `./prune.ts` (PruneInput/PruneOutput/
+// PruneMutationTools/AppliedMutation) — they depend on the Signal type from
+// ../knowledge/signals and are best co-located with the agent that owns them.
