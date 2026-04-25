@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { discoveryReports } from '../db/schema';
 import { generateId } from '../db/id';
 import type { Database } from '../db/connection';
+import { getSeedByDiscoveryReport, deleteSeed } from './seeds';
 
 export type DiscoveryReportStatus = 'pending' | 'reviewed' | 'dismissed';
 export type DiscoveredSourceProposalStatus = 'pending' | 'accepted' | 'declined';
@@ -156,7 +157,20 @@ export async function dismissDiscoveryReport(
 	db: Database,
 	id: string
 ): Promise<DiscoveryReport> {
-	await requirePendingReport(db, id);
+	const existing = await requirePendingReport(db, id);
+
+	const alreadyAccepted = existing.newSources.some((p) => p.status === 'accepted');
+	if (alreadyAccepted) {
+		throw new Error(
+			`discovery_report "${id}" has accepted proposals — dismiss is only valid before any acceptance. Decline remaining proposals instead.`
+		);
+	}
+
+	const seed = await getSeedByDiscoveryReport(db, id);
+	if (seed) {
+		await deleteSeed(db, seed.id);
+	}
+
 	const reviewedAt = new Date().toISOString();
 	await db
 		.update(discoveryReports)

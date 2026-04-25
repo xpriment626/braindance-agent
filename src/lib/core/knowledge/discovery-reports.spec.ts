@@ -125,4 +125,45 @@ describe('discovery_reports lifecycle', () => {
 		const dismissed = await dismissDiscoveryReport(db, r.id);
 		expect(dismissed.status).toBe('dismissed');
 	});
+
+	it('dismissDiscoveryReport deletes the unused journalist seed if one exists', async () => {
+		const { openDiscoveryReportForReview } = await import(
+			'../workflows/promoteDiscoveredSource'
+		);
+		const { getSeedByDiscoveryReport } = await import('./seeds');
+		const { createTopic } = await import('./topics');
+		const topic = await createTopic(db, { name: 'T' });
+		const r = await createDiscoveryReport(db, {
+			topicId: topic.id,
+			workflowRunId: 'wr-1',
+			summary: null,
+			newSources: [{ url: 'https://a', title: 'A', status: 'pending' }],
+			auditFindings: {}
+		});
+		await openDiscoveryReportForReview(db, r.id);
+		expect(await getSeedByDiscoveryReport(db, r.id)).not.toBeNull();
+		await dismissDiscoveryReport(db, r.id);
+		expect(await getSeedByDiscoveryReport(db, r.id)).toBeNull();
+	});
+
+	it('dismissDiscoveryReport rejects when any proposal is already accepted', async () => {
+		const { openDiscoveryReportForReview, acceptDiscoveredSource } = await import(
+			'../workflows/promoteDiscoveredSource'
+		);
+		const { createTopic } = await import('./topics');
+		const topic = await createTopic(db, { name: 'T' });
+		const r = await createDiscoveryReport(db, {
+			topicId: topic.id,
+			workflowRunId: 'wr-1',
+			summary: null,
+			newSources: [
+				{ url: 'https://a', title: 'A', status: 'pending' },
+				{ url: 'https://b', title: 'B', status: 'pending' }
+			],
+			auditFindings: {}
+		});
+		await openDiscoveryReportForReview(db, r.id);
+		await acceptDiscoveredSource(db, r.id, 0);
+		await expect(dismissDiscoveryReport(db, r.id)).rejects.toThrow(/accepted/);
+	});
 });
