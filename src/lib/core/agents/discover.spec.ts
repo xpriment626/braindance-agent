@@ -125,9 +125,9 @@ describe('runDiscover', () => {
 		};
 
 		const provider = createMockProvider(
-			toolCallResponse([searchCall('anything')]),
-			// Whatever the model decides next doesn't matter — we just want to
-			// inspect what the tool result looked like when it came back.
+			toolCallResponse([searchCall('anything', 'sa')]),
+			// Issue a second distinct search so the empty report below is allowed.
+			toolCallResponse([searchCall('alternate angle', 'sb')]),
 			toolCallResponse([reportCall([], 'no new findings')])
 		);
 
@@ -143,7 +143,11 @@ describe('runDiscover', () => {
 
 	it('exposes channel tools as search_<name>, extract_<name>, find_similar_<name>', async () => {
 		const channel = mockChannel();
-		const provider = createMockProvider(toolCallResponse([reportCall([], 'empty')]));
+		const provider = createMockProvider(
+			toolCallResponse([searchCall('q1', 'a')]),
+			toolCallResponse([searchCall('q2', 'b')]),
+			toolCallResponse([reportCall([], 'empty')])
+		);
 
 		await runDiscover(provider, [channel], BASE_INPUT);
 
@@ -162,7 +166,11 @@ describe('runDiscover', () => {
 			extract: async (r) => ({ url: r.url, title: r.title, content: '' })
 			// no findSimilar
 		};
-		const provider = createMockProvider(toolCallResponse([reportCall([], 'empty')]));
+		const provider = createMockProvider(
+			toolCallResponse([searchCall('q1', 'a')]),
+			toolCallResponse([searchCall('q2', 'b')]),
+			toolCallResponse([reportCall([], 'empty')])
+		);
 
 		await runDiscover(provider, [channel], BASE_INPUT);
 
@@ -213,6 +221,7 @@ describe('runDiscover', () => {
 
 		const output = await runDiscover(provider, [channel], BASE_INPUT);
 		// No extraction happened → no valid content → source is dropped.
+		// (Non-empty report bypasses the search-floor guard.)
 		expect(output.discoveredSources).toHaveLength(0);
 	});
 
@@ -228,12 +237,58 @@ describe('runDiscover', () => {
 			}
 		};
 
-		const provider = createMockProvider(toolCallResponse([reportCall([], 'noop')]));
+		const provider = createMockProvider(
+			toolCallResponse([searchCall('q1', 'a')]),
+			toolCallResponse([searchCall('q2', 'b')]),
+			toolCallResponse([reportCall([], 'noop')])
+		);
 
 		await runDiscover(provider, [enabled, disabled], input);
 
 		const names = provider.calls[0].tools!.map((t) => t.name);
 		expect(names).toContain('search_web');
 		expect(names).not.toContain('search_github');
+	});
+
+	it('rejects empty report_findings issued before MIN_SEARCHES distinct queries', async () => {
+		const channel = mockChannel({
+			search: async () => [{ url: 'https://eventually.com', title: 'Eventually' }]
+		});
+		const provider = createMockProvider(
+			// Premature empty report — should be pushed back
+			toolCallResponse([reportCall([], 'too soon', 'r0')]),
+			// Model retries with searches
+			toolCallResponse([searchCall('first try', 'sa')]),
+			toolCallResponse([searchCall('second try', 'sb')]),
+			// Now empty is allowed
+			toolCallResponse([reportCall([], 'tried both', 'r1')])
+		);
+
+		const output = await runDiscover(provider, [channel], BASE_INPUT);
+		expect(output.discoveredSources).toHaveLength(0);
+
+		// The provider was called 4 times (premature report + 2 searches + final report)
+		expect(provider.calls.length).toBe(4);
+		// And the second call should have seen a tool message rejecting the premature report
+		const rejection = provider.calls[1].messages.find(
+			(m) => m.role === 'tool' && m.toolCallId === 'r0'
+		);
+		expect(rejection).toBeDefined();
+		expect(rejection!.content).toContain('rejected');
+	});
+
+	it('counts repeated identical queries as one distinct search', async () => {
+		const channel = mockChannel({ search: async () => [] });
+		const provider = createMockProvider(
+			toolCallResponse([searchCall('same', 'a')]),
+			toolCallResponse([searchCall('same', 'b')]),
+			// Still only 1 distinct query — empty report should be rejected
+			toolCallResponse([reportCall([], 'too soon', 'r0')]),
+			toolCallResponse([searchCall('different', 'c')]),
+			toolCallResponse([reportCall([], 'now ok', 'r1')])
+		);
+
+		await runDiscover(provider, [channel], BASE_INPUT);
+		expect(provider.calls.length).toBe(5);
 	});
 });

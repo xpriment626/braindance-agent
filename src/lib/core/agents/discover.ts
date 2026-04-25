@@ -9,6 +9,10 @@ export interface RunDiscoverOptions {
 
 const DEFAULT_MODEL = 'moonshotai/kimi-k2.6';
 const DEFAULT_MAX_ITERATIONS = 20;
+// Minimum distinct search queries the agent must issue before reporting
+// empty findings. Defends against models (e.g. Kimi K2.6 in early smoke
+// runs) that decide reporting an empty array is a valid first move.
+const MIN_SEARCHES_BEFORE_EMPTY_REPORT = 2;
 
 interface ExtractionCacheEntry {
 	content: ExtractedContent;
@@ -103,10 +107,12 @@ function buildTools(channels: Channel[]): ToolDef[] {
 const DISCOVER_SYSTEM_PROMPT = `You are a research discovery agent. You search for sources that extend a knowledge base on a given topic.
 
 Your tools let you search channels, extract content, and find similar pages. Work iteratively:
-1. Issue searches tuned to the topic's narrative threads.
+1. Issue searches tuned to the topic's narrative threads. Try at least two distinct queries before drawing any conclusion about coverage.
 2. For promising results, extract their full content.
 3. Optionally use find_similar on high-value results to expand coverage.
 4. When you have enough, call report_findings exactly once with the sources worth keeping.
+
+Effort floor: do not report empty findings without first issuing at least two distinct search queries. If your first search returns nothing relevant, broaden the query, try a different angle, or search a different narrative thread before deciding the topic has no on-thread sources. Reporting an empty array is a last resort, not a default.
 
 Be selective. Only include sources with confidence >= 0.5. Classify each as "on_thread" (directly about a defined narrative thread) or "adjacent" (interesting lead beyond defined threads).
 
@@ -157,6 +163,8 @@ export async function runDiscover(
 		{ role: 'user', content: buildInitialPrompt(input) }
 	];
 
+	const distinctSearchQueries = new Set<string>();
+
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
 		const result = await llm.generate({
 			model,
@@ -179,6 +187,22 @@ export async function runDiscover(
 
 		for (const call of result.toolCalls) {
 			if (call.name === 'report_findings') {
+				const reported = Array.isArray(call.input.discoveredSources)
+					? call.input.discoveredSources
+					: [];
+				if (
+					reported.length === 0 &&
+					distinctSearchQueries.size < MIN_SEARCHES_BEFORE_EMPTY_REPORT
+				) {
+					messages.push({
+						role: 'tool',
+						toolCallId: call.id,
+						content: JSON.stringify({
+							error: `report_findings rejected: only ${distinctSearchQueries.size} distinct search queries issued so far. Issue at least ${MIN_SEARCHES_BEFORE_EMPTY_REPORT} different queries (broaden phrasing, try a different narrative thread) before reporting empty findings.`
+						})
+					});
+					continue;
+				}
 				return finalize(call, extractionCache);
 			}
 			const toolOutput = await dispatchChannelTool(
@@ -189,6 +213,10 @@ export async function runDiscover(
 				extractionCache,
 				searchResultsByUrl
 			);
+			if (call.name.startsWith('search_')) {
+				const query = asString(call.input.query);
+				if (query) distinctSearchQueries.add(query.trim().toLowerCase());
+			}
 			messages.push({
 				role: 'tool',
 				toolCallId: call.id,
