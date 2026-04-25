@@ -17,6 +17,7 @@ export interface Seed {
 	processedCount: number;
 	failures: string | null;
 	topicSnapshot: string | null;
+	discoveryReportId: string | null;
 	createdAt: string;
 	completedAt: string | null;
 }
@@ -27,6 +28,7 @@ export interface CreateSeedInput {
 	origin: SeedOrigin;
 	inputCount: number;
 	topicSnapshot?: Record<string, unknown>;
+	discoveryReportId?: string;
 }
 
 export interface SeedFailure {
@@ -46,11 +48,27 @@ export async function createSeed(db: Database, input: CreateSeedInput): Promise<
 		processedCount: 0,
 		failures: null,
 		topicSnapshot: input.topicSnapshot ? JSON.stringify(input.topicSnapshot) : null,
+		discoveryReportId: input.discoveryReportId ?? null,
 		createdAt: new Date().toISOString(),
 		completedAt: null
 	};
 	await db.insert(seeds).values(record);
 	return record;
+}
+
+export async function getSeedByDiscoveryReport(
+	db: Database,
+	discoveryReportId: string
+): Promise<Seed | null> {
+	const results = await db
+		.select()
+		.from(seeds)
+		.where(eq(seeds.discoveryReportId, discoveryReportId));
+	return (results[0] as Seed | undefined) ?? null;
+}
+
+export async function deleteSeed(db: Database, id: string): Promise<void> {
+	await db.delete(seeds).where(eq(seeds.id, id));
 }
 
 export async function getSeed(db: Database, id: string): Promise<Seed | null> {

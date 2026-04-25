@@ -141,6 +141,17 @@ export async function reviewDiscoveryReport(
 	return updated;
 }
 
+export async function updateDiscoveredSources(
+	db: Database,
+	id: string,
+	newSources: DiscoveredSourceProposal[]
+): Promise<void> {
+	await db
+		.update(discoveryReports)
+		.set({ newSources: JSON.stringify(newSources) })
+		.where(eq(discoveryReports.id, id));
+}
+
 export async function dismissDiscoveryReport(
 	db: Database,
 	id: string
