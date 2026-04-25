@@ -12,7 +12,12 @@ import {
 	type SeedOrigin
 } from './seeds';
 import { createSource } from './sources';
-import { getTopic, updateTopic, type UpdateTopicInput } from './topics';
+import {
+	createTopic,
+	getTopic,
+	updateTopic,
+	type UpdateTopicInput
+} from './topics';
 
 export interface ProcessConfig {
 	filesDir: string;
@@ -21,6 +26,8 @@ export interface ProcessConfig {
 }
 
 export interface BriefingCard {
+	name?: string;
+	description?: string;
 	guidance?: string;
 	narrativeThreads?: string[];
 	inputs: SeedInput[];
@@ -123,28 +130,59 @@ export async function processSeed(
 
 export async function processBriefingCard(
 	db: Database,
-	topicId: string,
+	topicId: string | null,
 	card: BriefingCard,
 	config: ProcessConfig
-): Promise<{ seedId: string }> {
-	// Apply briefing-card metadata to the topic.
-	const updates: UpdateTopicInput = {};
-	if (card.guidance !== undefined) updates.guidance = card.guidance;
-	if (card.narrativeThreads !== undefined) updates.narrativeThreads = card.narrativeThreads;
-	if (Object.keys(updates).length > 0) {
-		await updateTopic(db, topicId, updates);
+): Promise<{ seedId: string; topicId: string }> {
+	// File inputs are not yet supported via briefing cards (Phase 2 deferred
+	// the UI-side upload path; core handleFile exists but needs a caller to
+	// materialize the file on disk first).
+	for (const input of card.inputs) {
+		if (input.type === 'file') {
+			throw new Error(
+				'File inputs are not yet supported via briefing cards (deferred). Use freeform processSeed or wait for UI file-upload support.'
+			);
+		}
+	}
+
+	let resolvedTopicId: string;
+	if (topicId === null) {
+		if (!card.name) {
+			throw new Error('Briefing card without topicId must include name to create a new topic');
+		}
+		const created = await createTopic(db, {
+			name: card.name,
+			description: card.description,
+			guidance: card.guidance,
+			narrativeThreads: card.narrativeThreads
+		});
+		resolvedTopicId = created.id;
+	} else {
+		const existing = await getTopic(db, topicId);
+		if (!existing) throw new Error(`Topic not found: ${topicId}`);
+		const updates: UpdateTopicInput = {};
+		if (card.name !== undefined) updates.name = card.name;
+		if (card.description !== undefined) updates.description = card.description;
+		if (card.guidance !== undefined) updates.guidance = card.guidance;
+		if (card.narrativeThreads !== undefined) updates.narrativeThreads = card.narrativeThreads;
+		if (Object.keys(updates).length > 0) {
+			await updateTopic(db, topicId, updates);
+		}
+		resolvedTopicId = topicId;
 	}
 
 	// Snapshot the topic's post-update state — records what was in force at seed time.
-	const topic = await getTopic(db, topicId);
-	if (!topic) throw new Error(`Topic not found: ${topicId}`);
+	const topic = await getTopic(db, resolvedTopicId);
+	if (!topic) throw new Error(`Topic not found: ${resolvedTopicId}`);
 	const topicSnapshot = {
+		name: topic.name,
+		description: topic.description,
 		guidance: topic.guidance,
 		narrativeThreads: topic.narrativeThreads ? JSON.parse(topic.narrativeThreads) : null
 	};
 
 	const seed = await createSeed(db, {
-		topicId,
+		topicId: resolvedTopicId,
 		type: 'briefing_card',
 		origin: config.origin ?? 'user',
 		inputCount: card.inputs.length,
@@ -153,10 +191,10 @@ export async function processBriefingCard(
 
 	if (card.inputs.length === 0) {
 		await completeSeed(db, seed.id);
-		return { seedId: seed.id };
+		return { seedId: seed.id, topicId: resolvedTopicId };
 	}
 
-	const failures = await runInputPipeline(db, topicId, seed.id, card.inputs, config);
+	const failures = await runInputPipeline(db, resolvedTopicId, seed.id, card.inputs, config);
 	await completeSeed(db, seed.id, failures.length > 0 ? failures : undefined);
-	return { seedId: seed.id };
+	return { seedId: seed.id, topicId: resolvedTopicId };
 }

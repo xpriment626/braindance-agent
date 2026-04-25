@@ -219,4 +219,64 @@ describe('processBriefingCard', () => {
 		const sources = await listSourcesByTopic(db, topicId);
 		expect(sources).toHaveLength(2);
 	});
+
+	it('creates a new topic when topicId is null and name is provided', async () => {
+		const result = await processBriefingCard(
+			db,
+			null,
+			{
+				name: 'Brand new topic',
+				description: 'scoped to MCP adoption',
+				guidance: 'Focus on open-source MCP servers',
+				narrativeThreads: ['adoption'],
+				inputs: []
+			},
+			{ filesDir: '/tmp/files' }
+		);
+		expect(result.topicId).toBeTruthy();
+		const created = await getTopic(db, result.topicId);
+		expect(created?.name).toBe('Brand new topic');
+		expect(created?.description).toBe('scoped to MCP adoption');
+		expect(created?.guidance).toBe('Focus on open-source MCP servers');
+	});
+
+	it('throws when topicId is null but name is missing', async () => {
+		await expect(
+			processBriefingCard(
+				db,
+				null,
+				{ guidance: 'x', inputs: [] },
+				{ filesDir: '/tmp/files' }
+			)
+		).rejects.toThrow(/name/);
+	});
+
+	it('rejects file inputs (deferred in slice 3.5)', async () => {
+		await expect(
+			processBriefingCard(
+				db,
+				topicId,
+				{
+					inputs: [{ type: 'file', value: '/some/path.md' }]
+				},
+				{ filesDir: '/tmp/files' }
+			)
+		).rejects.toThrow(/not yet supported/);
+	});
+
+	it('updates topic name and description when provided', async () => {
+		await processBriefingCard(
+			db,
+			topicId,
+			{
+				name: 'Renamed',
+				description: 'new description',
+				inputs: []
+			},
+			{ filesDir: '/tmp/files' }
+		);
+		const updated = await getTopic(db, topicId);
+		expect(updated?.name).toBe('Renamed');
+		expect(updated?.description).toBe('new description');
+	});
 });
