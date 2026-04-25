@@ -76,7 +76,8 @@ export async function addKnowledge(
 				confidence: s.confidence,
 				threadAssociations: s.threadAssociations,
 				scope: s.scope,
-				channel: s.channel
+				channel: s.channel,
+				status: 'pending'
 			})
 		);
 

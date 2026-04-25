@@ -22,18 +22,40 @@ describe('discovery_reports lifecycle', () => {
 			topicId: 'topic-1',
 			workflowRunId: 'wr-1',
 			summary: 'Added 3 new sources on transformer inference',
-			newSources: [{ url: 'https://a.example', title: 'A', confidence: 0.9 }],
+			newSources: [
+				{ url: 'https://a.example', title: 'A', confidence: 0.9, status: 'pending' }
+			],
 			auditFindings: { freshnessFlags: [{ targetId: 'src-x', reason: 'old' }] }
 		});
 		expect(report.status).toBe('pending');
 		expect(report.id).toBeTruthy();
 		expect(report.newSources).toEqual([
-			{ url: 'https://a.example', title: 'A', confidence: 0.9 }
+			{ url: 'https://a.example', title: 'A', confidence: 0.9, status: 'pending' }
 		]);
 		expect(report.auditFindings).toEqual({
 			freshnessFlags: [{ targetId: 'src-x', reason: 'old' }]
 		});
 		expect(report.reviewedAt).toBeNull();
+	});
+
+	it('defaults missing proposal status to "pending" on read (back-compat)', async () => {
+		const created = await createDiscoveryReport(db, {
+			topicId: 'topic-1',
+			workflowRunId: 'wr-1',
+			summary: null,
+			newSources: [],
+			auditFindings: {}
+		});
+		const { discoveryReports } = await import('../db/schema');
+		const { eq } = await import('drizzle-orm');
+		await db
+			.update(discoveryReports)
+			.set({
+				newSources: JSON.stringify([{ url: 'https://x', title: 'X' }])
+			})
+			.where(eq(discoveryReports.id, created.id));
+		const reread = await getDiscoveryReport(db, created.id);
+		expect(reread?.newSources[0].status).toBe('pending');
 	});
 
 	it('getDiscoveryReport returns the record back', async () => {

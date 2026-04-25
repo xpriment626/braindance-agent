@@ -123,6 +123,7 @@ describe('addKnowledge workflow', () => {
 		expect(report?.status).toBe('pending');
 		expect(report?.newSources).toHaveLength(1);
 		expect(report?.newSources[0].url).toBe('https://example.com/a');
+		expect(report?.newSources[0].status).toBe('pending');
 		expect(report?.summary).toContain('stale');
 
 		const signals = await listSignalsByTopic(db, topicId);

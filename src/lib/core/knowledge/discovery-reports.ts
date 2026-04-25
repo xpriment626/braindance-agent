@@ -4,6 +4,7 @@ import { generateId } from '../db/id';
 import type { Database } from '../db/connection';
 
 export type DiscoveryReportStatus = 'pending' | 'reviewed' | 'dismissed';
+export type DiscoveredSourceProposalStatus = 'pending' | 'accepted' | 'declined';
 
 export interface DiscoveredSourceProposal {
 	url?: string;
@@ -14,6 +15,7 @@ export interface DiscoveredSourceProposal {
 	threadAssociations?: string[];
 	scope?: 'on_thread' | 'adjacent';
 	channel?: string;
+	status: DiscoveredSourceProposalStatus;
 }
 
 export interface DiscoveryReport {
@@ -49,15 +51,21 @@ interface DiscoveryReportRow {
 }
 
 function fromRow(row: DiscoveryReportRow): DiscoveryReport {
+	const parsed = row.newSources
+		? (JSON.parse(row.newSources) as Partial<DiscoveredSourceProposal>[])
+		: [];
+	const newSources: DiscoveredSourceProposal[] = parsed.map((p) => ({
+		...(p as DiscoveredSourceProposal),
+		title: p.title ?? '',
+		status: p.status ?? 'pending'
+	}));
 	return {
 		id: row.id,
 		topicId: row.topicId,
 		workflowRunId: row.workflowRunId,
 		status: row.status as DiscoveryReportStatus,
 		summary: row.summary,
-		newSources: row.newSources
-			? (JSON.parse(row.newSources) as DiscoveredSourceProposal[])
-			: [],
+		newSources,
 		auditFindings: row.auditFindings
 			? (JSON.parse(row.auditFindings) as Record<string, unknown>)
 			: {},
