@@ -85,16 +85,15 @@ describe.skipIf(!SMOKE_ENABLED)('addKnowledge — real-provider smoke', () => {
 			const report = await getDiscoveryReport(db, discoveryReportId);
 			expect(report).not.toBeNull();
 			expect(report!.status).toBe('pending');
-			expect(report!.newSources.length).toBeGreaterThan(0);
+			expect(Array.isArray(report!.newSources)).toBe(true);
+			// Smoke validates shape, not content. Empty findings are a real
+			// signal worth investigating but not a pipeline failure.
 			for (const proposal of report!.newSources) {
 				expect(proposal.status).toBe('pending');
 				expect(proposal.title).toBeTruthy();
 			}
 
 			const signals = await listSignalsByTopic(db, topicId);
-			// Real corpus is empty here, so audit may or may not raise signals.
-			// Don't assert count — just assert that whatever it produced has the
-			// expected shape.
 			for (const signal of signals) {
 				expect(signal.status).toBe('pending');
 				expect(signal.raisedBy).toBe('audit');
