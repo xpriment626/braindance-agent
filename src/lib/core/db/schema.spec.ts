@@ -60,4 +60,35 @@ describe('initProjectDb', () => {
 		await initProjectDb(db); // should not throw
 		expect(await db.select().from(topics)).toEqual([]);
 	});
+
+	it('seeds table has nullable discovery_report_id column for journalist-seed traceability', async () => {
+		const db = createDb(':memory:');
+		await initProjectDb(db);
+		await db.insert(seeds).values({
+			id: 'seed-1',
+			topicId: 'topic-1',
+			type: 'freeform',
+			status: 'processing',
+			origin: 'journalist',
+			inputCount: 3,
+			processedCount: 0,
+			discoveryReportId: 'report-abc',
+			createdAt: new Date().toISOString()
+		});
+		await db.insert(seeds).values({
+			id: 'seed-2',
+			topicId: 'topic-1',
+			type: 'freeform',
+			status: 'processing',
+			origin: 'user',
+			inputCount: 1,
+			processedCount: 0,
+			createdAt: new Date().toISOString()
+		});
+		const rows = await db.select().from(seeds);
+		const linked = rows.find((r) => r.id === 'seed-1');
+		const unlinked = rows.find((r) => r.id === 'seed-2');
+		expect(linked?.discoveryReportId).toBe('report-abc');
+		expect(unlinked?.discoveryReportId).toBeNull();
+	});
 });

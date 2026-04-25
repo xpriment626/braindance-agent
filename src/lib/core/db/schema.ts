@@ -24,6 +24,7 @@ export const seeds = sqliteTable('seeds', {
 	processedCount: integer('processed_count').notNull().default(0),
 	failures: text('failures'), // JSON { input_index, type, error }[]
 	topicSnapshot: text('topic_snapshot'), // JSON topic metadata snapshot
+	discoveryReportId: text('discovery_report_id'), // nullable; links journalist-origin seeds to their discovery report
 	createdAt: text('created_at').notNull(),
 	completedAt: text('completed_at')
 });
@@ -120,6 +121,7 @@ export async function initProjectDb(db: Database): Promise<void> {
 		processed_count INTEGER NOT NULL DEFAULT 0,
 		failures TEXT,
 		topic_snapshot TEXT,
+		discovery_report_id TEXT,
 		created_at TEXT NOT NULL,
 		completed_at TEXT
 	)`);
