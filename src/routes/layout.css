@@ -1,3 +1,27 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+/* Starlit Duet (sd-) palette — sourced from design-assets/canvas.pen.
+   Names match canvas tokens verbatim minus the `sd-` prefix; Tailwind v4
+   exposes each as bg-*, text-*, border-* utilities automatically. */
+@theme {
+	--color-midnight: #0e1a3d;
+	--color-cloud: #ebf0fa;
+	--color-page-bg: #f3f6fc;
+	--color-card-bg: #ffffff;
+	--color-border: #d7e0ee;
+	--color-text-muted: #6e7fa0;
+	--color-starlight: #f5e6b8;
+	--color-sidebar-bg: #e5ecf7;
+	--color-mist: #b8c8e0;
+	--color-dusk: #3a4e7a;
+	--color-red-thread: #c4384e;
+}
+
+/* App-wide page chrome. */
+html,
+body {
+	background: var(--color-page-bg);
+	color: var(--color-midnight);
+}
