@@ -9,8 +9,10 @@ import { createDiscoveryReport, dismissDiscoveryReport } from './discovery-repor
 import { generateId } from '../db/id';
 import {
 	countSourcesByTopic,
+	countSourcesByProject,
 	countPendingSignalsByTopic,
 	countPendingDiscoveryReportsByProject,
+	countPendingDiscoveryReportsByTopic,
 	corpusHealthByTopic,
 	threadCoverageByTopic
 } from './aggregations';
@@ -103,6 +105,39 @@ describe('aggregations', () => {
 		expect(await countPendingDiscoveryReportsByProject(db)).toBe(2);
 		await dismissDiscoveryReport(db, r2.id);
 		expect(await countPendingDiscoveryReportsByProject(db)).toBe(1);
+	});
+
+	it('countPendingDiscoveryReportsByTopic scopes to a single topic', async () => {
+		await createDiscoveryReport(db, {
+			topicId,
+			workflowRunId: 'wr-a',
+			summary: null,
+			newSources: [],
+			auditFindings: {}
+		});
+		await createDiscoveryReport(db, {
+			topicId,
+			workflowRunId: 'wr-b',
+			summary: null,
+			newSources: [],
+			auditFindings: {}
+		});
+		await createDiscoveryReport(db, {
+			topicId: otherTopicId,
+			workflowRunId: 'wr-c',
+			summary: null,
+			newSources: [],
+			auditFindings: {}
+		});
+		expect(await countPendingDiscoveryReportsByTopic(db, topicId)).toBe(2);
+		expect(await countPendingDiscoveryReportsByTopic(db, otherTopicId)).toBe(1);
+	});
+
+	it('countSourcesByProject counts across all topics', async () => {
+		await addSource(topicId);
+		await addSource(topicId);
+		await addSource(otherTopicId);
+		expect(await countSourcesByProject(db)).toBe(3);
 	});
 
 	it('corpusHealthByTopic groups pending signals by type', async () => {

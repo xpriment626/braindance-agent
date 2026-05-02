@@ -30,6 +30,24 @@ export async function countPendingDiscoveryReportsByProject(db: Database): Promi
 	return result[0]?.n ?? 0;
 }
 
+export async function countPendingDiscoveryReportsByTopic(
+	db: Database,
+	topicId: string
+): Promise<number> {
+	const result = await db
+		.select({ n: count() })
+		.from(discoveryReports)
+		.where(
+			and(eq(discoveryReports.topicId, topicId), eq(discoveryReports.status, 'pending'))
+		);
+	return result[0]?.n ?? 0;
+}
+
+export async function countSourcesByProject(db: Database): Promise<number> {
+	const result = await db.select({ n: count() }).from(sources);
+	return result[0]?.n ?? 0;
+}
+
 export interface CorpusHealth {
 	fresh: number;
 	stale: number;
