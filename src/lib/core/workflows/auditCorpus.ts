@@ -2,6 +2,7 @@ import type { Database } from '../db/connection';
 import type { LLMProvider } from '../agents/llm';
 import type { TopicContext, CorpusSource } from '../agents/types';
 import { getTopic } from '../knowledge/topics';
+import { ValidationError } from '../errors/types';
 import { listSourcesByTopic } from '../knowledge/sources';
 import { runAudit } from '../agents/audit';
 import {
@@ -11,6 +12,12 @@ import {
 } from './runs';
 import { persistAuditSignals } from './persistAuditSignals';
 import type { WorkflowConfig } from './addKnowledge';
+import { normalizeError } from '../errors/normalize';
+import {
+	createAgentRun,
+	completeAgentRun,
+	failAgentRun
+} from '../agents/runs';
 
 export interface AuditCorpusOptions {
 	llm: LLMProvider;
@@ -28,7 +35,7 @@ export async function auditCorpus(
 	options: AuditCorpusOptions
 ): Promise<AuditCorpusResult> {
 	const topic = await getTopic(db, topicId);
-	if (!topic) throw new Error(`topic "${topicId}" not found`);
+	if (!topic) throw new ValidationError('topic-not-found', `topic "${topicId}" not found`);
 
 	const run = await createWorkflowRun(db, {
 		type: 'audit_corpus',
@@ -56,14 +63,25 @@ export async function auditCorpus(
 			createdAt: s.createdAt
 		}));
 
-		const auditOutput = await runAudit(options.llm, { topic: topicContext, corpus });
+		const auditRun = await createAgentRun(db, {
+			agentType: 'audit',
+			topicId,
+			workflowRunId: run.id
+		});
+		let auditOutput;
+		try {
+			auditOutput = await runAudit(options.llm, { topic: topicContext, corpus });
+			await completeAgentRun(db, auditRun.id);
+		} catch (e) {
+			await failAgentRun(db, auditRun.id, normalizeError(e, { agent: 'audit' }));
+			throw e;
+		}
 		const signalIds = await persistAuditSignals(db, topicId, auditOutput);
 		await stageWorkflowRun(db, run.id);
 
 		return { workflowRunId: run.id, signalIds };
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		await failWorkflowRun(db, run.id, message);
+		await failWorkflowRun(db, run.id, normalizeError(error));
 		throw error;
 	}
 }

@@ -135,7 +135,7 @@ describe('addKnowledge workflow', () => {
 		expect(gap?.targetType).toBe('thread');
 	});
 
-	it('fails the workflow when discover throws', async () => {
+	it('fails the workflow when discover throws and persists structured error', async () => {
 		const failingLLM: LLMProvider = {
 			async generate() {
 				throw new Error('LLM down');
@@ -148,14 +148,26 @@ describe('addKnowledge workflow', () => {
 				config: {}
 			})
 		).rejects.toThrow(/LLM down/);
-		// The workflow run should be marked failed, not left running.
-		const runs = await db
-			.select()
-			.from((await import('../db/schema')).workflowRuns)
-			.execute();
-		expect(runs).toHaveLength(1);
-		expect(runs[0].status).toBe('failed');
-		expect(runs[0].error).toContain('LLM down');
+
+		// The workflow run should be marked failed with a parseable structured error.
+		const { getWorkflowRun, listWorkflowRunsByTopic } = await import('./runs');
+		const wfRuns = await listWorkflowRunsByTopic(db, topicId);
+		expect(wfRuns).toHaveLength(1);
+		const wf = await getWorkflowRun(db, wfRuns[0].id);
+		expect(wf!.status).toBe('failed');
+		expect(wf!.error).not.toBeNull();
+		expect(wf!.error!.message).toContain('LLM down');
+		expect(wf!.error!.code).toBe('INTERNAL'); // unrecognized untyped throw
+
+		// The discover agent_run should also be marked failed with agent='discover'.
+		const { listAgentRunsByTopic } = await import('../agents/runs');
+		const agents = await listAgentRunsByTopic(db, topicId);
+		const discoverFailed = agents.find(
+			(a) => a.agentType === 'discover' && a.status === 'failed'
+		);
+		expect(discoverFailed).toBeDefined();
+		expect(discoverFailed!.error!.agent).toBe('discover');
+		expect(discoverFailed!.error!.message).toContain('LLM down');
 	});
 
 	it('throws when the topic does not exist', async () => {

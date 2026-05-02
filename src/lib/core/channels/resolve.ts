@@ -1,4 +1,5 @@
 import type { ChannelConfig } from '../config/types';
+import { ValidationError } from '../errors/types';
 
 export interface RunChannelOverride {
 	enabled?: boolean;
@@ -19,12 +20,14 @@ export function resolveChannelSelection(
 	for (const [name, override] of Object.entries(run)) {
 		const globalCfg = global[name];
 		if (!globalCfg) {
-			throw new Error(
+			throw new ValidationError(
+				'config',
 				`channel "${name}" not configured globally — add it to config.yaml before selecting per-run`
 			);
 		}
 		if (!globalCfg.enabled) {
-			throw new Error(
+			throw new ValidationError(
+				'config',
 				`channel "${name}" is disabled globally — enable in config.yaml before selecting per-run`
 			);
 		}

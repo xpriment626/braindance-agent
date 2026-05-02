@@ -2,6 +2,12 @@ import { eq } from 'drizzle-orm';
 import { workflowRuns } from '../db/schema';
 import { generateId } from '../db/id';
 import type { Database } from '../db/connection';
+import { ValidationError } from '../errors/types';
+import {
+	parseWorkflowRunError,
+	serializeWorkflowRunError,
+	type WorkflowRunError
+} from '../errors/contract';
 
 export type WorkflowType = 'add_knowledge' | 'audit_corpus' | 'prune_corpus';
 export type WorkflowStatus = 'running' | 'staged' | 'completed' | 'failed';
@@ -14,7 +20,7 @@ export interface WorkflowRun {
 	config: Record<string, unknown> | null;
 	startedAt: string;
 	completedAt: string | null;
-	error: string | null;
+	error: WorkflowRunError | null;
 }
 
 export interface CreateWorkflowRunInput {
@@ -43,7 +49,7 @@ function fromRow(row: WorkflowRunRow): WorkflowRun {
 		config: row.config ? (JSON.parse(row.config) as Record<string, unknown>) : null,
 		startedAt: row.startedAt,
 		completedAt: row.completedAt,
-		error: row.error
+		error: parseWorkflowRunError(row.error)
 	};
 }
 
@@ -90,9 +96,10 @@ async function requireStatus(
 	allowed: WorkflowStatus[]
 ): Promise<WorkflowRun> {
 	const existing = await getWorkflowRun(db, id);
-	if (!existing) throw new Error(`workflow_run "${id}" not found`);
+	if (!existing) throw new ValidationError('run-state', `workflow_run "${id}" not found`);
 	if (!allowed.includes(existing.status)) {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`workflow_run "${id}" is ${existing.status}, expected one of [${allowed.join(', ')}]`
 		);
 	}
@@ -103,7 +110,7 @@ export async function stageWorkflowRun(db: Database, id: string): Promise<Workfl
 	await requireStatus(db, id, ['running']);
 	await db.update(workflowRuns).set({ status: 'staged' }).where(eq(workflowRuns.id, id));
 	const updated = await getWorkflowRun(db, id);
-	if (!updated) throw new Error(`workflow_run "${id}" vanished after stage`);
+	if (!updated) throw new ValidationError('run-state', `workflow_run "${id}" vanished after stage`);
 	return updated;
 }
 
@@ -118,22 +125,22 @@ export async function completeWorkflowRun(
 		.set({ status: 'completed', completedAt })
 		.where(eq(workflowRuns.id, id));
 	const updated = await getWorkflowRun(db, id);
-	if (!updated) throw new Error(`workflow_run "${id}" vanished after complete`);
+	if (!updated) throw new ValidationError('run-state', `workflow_run "${id}" vanished after complete`);
 	return updated;
 }
 
 export async function failWorkflowRun(
 	db: Database,
 	id: string,
-	error: string
+	error: WorkflowRunError
 ): Promise<WorkflowRun> {
 	await requireStatus(db, id, ['running', 'staged']);
 	const completedAt = new Date().toISOString();
 	await db
 		.update(workflowRuns)
-		.set({ status: 'failed', error, completedAt })
+		.set({ status: 'failed', error: serializeWorkflowRunError(error), completedAt })
 		.where(eq(workflowRuns.id, id));
 	const updated = await getWorkflowRun(db, id);
-	if (!updated) throw new Error(`workflow_run "${id}" vanished after fail`);
+	if (!updated) throw new ValidationError('run-state', `workflow_run "${id}" vanished after fail`);
 	return updated;
 }

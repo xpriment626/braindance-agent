@@ -1,5 +1,6 @@
 import type { LLMProvider, ChatMessage, ToolDef, ToolCall } from './llm';
 import type { AuditInput, AuditOutput, AuditSignal, GapAnalysis, ConsolidationSuggestion } from './types';
+import { AgentProtocolError } from '../errors/types';
 
 export interface RunAuditOptions {
 	model?: string;
@@ -141,7 +142,9 @@ export async function runAudit(
 		}
 	}
 
-	throw new Error(
+	throw new AgentProtocolError(
+		'iteration-limit',
+		'audit',
 		`Audit agent exceeded maxIterations (${maxIterations}) without calling submit_audit`
 	);
 }

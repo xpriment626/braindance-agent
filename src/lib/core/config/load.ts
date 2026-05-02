@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { readFile, writeFile, chmod, mkdir } from 'node:fs/promises';
 import { parse, stringify } from 'yaml';
 import type { PartialBraindanceConfig } from './types';
+import { ValidationError } from '../errors/types';
 
 export async function loadConfig(configDir: string): Promise<PartialBraindanceConfig | null> {
 	const path = join(configDir, 'config.yaml');
@@ -16,7 +17,10 @@ export async function loadConfig(configDir: string): Promise<PartialBraindanceCo
 	const parsed = parse(text);
 	if (parsed === null || parsed === undefined) return null;
 	if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-		throw new Error(`config.yaml must be an object at top level, got ${typeof parsed}`);
+		throw new ValidationError(
+			'config',
+			`config.yaml must be an object at top level, got ${typeof parsed}`
+		);
 	}
 	return parsed as PartialBraindanceConfig;
 }

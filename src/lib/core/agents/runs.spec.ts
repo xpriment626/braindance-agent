@@ -80,12 +80,24 @@ describe('agent runs', () => {
 	});
 
 	describe('failAgentRun', () => {
-		it('sets status to failed with error message and completedAt', async () => {
+		it('sets status to failed with structured error and completedAt', async () => {
 			const created = await createAgentRun(db, { agentType: 'discover', topicId });
-			await failAgentRun(db, created.id, 'LLM returned malformed JSON');
+			await failAgentRun(db, created.id, {
+				category: 'transient',
+				code: 'OPENROUTER_MALFORMED_RESPONSE',
+				message: 'LLM returned malformed JSON',
+				agent: 'discover',
+				source: { kind: 'llm', name: 'openrouter' }
+			});
 			const found = await getAgentRun(db, created.id);
 			expect(found!.status).toBe('failed');
-			expect(found!.error).toBe('LLM returned malformed JSON');
+			expect(found!.error).toEqual({
+				category: 'transient',
+				code: 'OPENROUTER_MALFORMED_RESPONSE',
+				message: 'LLM returned malformed JSON',
+				agent: 'discover',
+				source: { kind: 'llm', name: 'openrouter' }
+			});
 			expect(found!.completedAt).toBeTruthy();
 		});
 	});

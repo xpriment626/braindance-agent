@@ -1,6 +1,7 @@
 import { generateId } from '../db/id';
 import type { Database } from '../db/connection';
 import type { SeedInput, HandlerResult, UrlScraper, InputType } from './handlers/types';
+import { ValidationError } from '../errors/types';
 import { handleText } from './handlers/text';
 import { handleFile } from './handlers/file';
 import { handleUrl } from './handlers/url';
@@ -44,7 +45,8 @@ async function processInput(
 	scraper?: UrlScraper
 ): Promise<HandlerResult> {
 	if (isUnsupportedType(input.type)) {
-		throw new Error(
+		throw new ValidationError(
+			'input-type',
 			`Input type "${input.type}" not yet supported in Phase 2 (value: ${input.value})`
 		);
 	}
@@ -54,11 +56,11 @@ async function processInput(
 		case 'file':
 			return handleFile(input.value, filesDir, sourceId);
 		case 'url':
-			if (!scraper) throw new Error('URL scraper required for URL inputs');
+			if (!scraper) throw new ValidationError('input-type', 'URL scraper required for URL inputs');
 			return handleUrl(input.value, scraper);
 		default: {
 			const exhaustive: never = input.type;
-			throw new Error(`Unhandled input type: ${exhaustive}`);
+			throw new ValidationError('input-type', `Unhandled input type: ${exhaustive}`);
 		}
 	}
 }
@@ -139,7 +141,8 @@ export async function processBriefingCard(
 	// materialize the file on disk first).
 	for (const input of card.inputs) {
 		if (input.type === 'file') {
-			throw new Error(
+			throw new ValidationError(
+				'briefing-card',
 				'File inputs are not yet supported via briefing cards (deferred). Use freeform processSeed or wait for UI file-upload support.'
 			);
 		}
@@ -148,7 +151,10 @@ export async function processBriefingCard(
 	let resolvedTopicId: string;
 	if (topicId === null) {
 		if (!card.name) {
-			throw new Error('Briefing card without topicId must include name to create a new topic');
+			throw new ValidationError(
+				'briefing-card',
+				'Briefing card without topicId must include name to create a new topic'
+			);
 		}
 		const created = await createTopic(db, {
 			name: card.name,
@@ -159,7 +165,7 @@ export async function processBriefingCard(
 		resolvedTopicId = created.id;
 	} else {
 		const existing = await getTopic(db, topicId);
-		if (!existing) throw new Error(`Topic not found: ${topicId}`);
+		if (!existing) throw new ValidationError('topic-not-found', `Topic not found: ${topicId}`);
 		const updates: UpdateTopicInput = {};
 		if (card.name !== undefined) updates.name = card.name;
 		if (card.description !== undefined) updates.description = card.description;
@@ -173,7 +179,7 @@ export async function processBriefingCard(
 
 	// Snapshot the topic's post-update state — records what was in force at seed time.
 	const topic = await getTopic(db, resolvedTopicId);
-	if (!topic) throw new Error(`Topic not found: ${resolvedTopicId}`);
+	if (!topic) throw new ValidationError('topic-not-found', `Topic not found: ${resolvedTopicId}`);
 	const topicSnapshot = {
 		name: topic.name,
 		description: topic.description,

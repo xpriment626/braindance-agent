@@ -1,6 +1,7 @@
 import type { LLMProvider, ChatMessage, ToolDef, ToolCall } from './llm';
 import type { DiscoverInput, DiscoverOutput, DiscoveredSource } from './types';
 import type { Channel, SearchResult, ExtractedContent } from '../channels/types';
+import { AgentProtocolError } from '../errors/types';
 
 export interface RunDiscoverOptions {
 	model?: string;
@@ -174,7 +175,9 @@ export async function runDiscover(
 		});
 
 		if (result.toolCalls.length === 0) {
-			throw new Error(
+			throw new AgentProtocolError(
+				'no-tool-call',
+				'discover',
 				`Discover agent stopped without calling report_findings (iteration ${iteration}, stopReason=${result.stopReason})`
 			);
 		}
@@ -225,7 +228,9 @@ export async function runDiscover(
 		}
 	}
 
-	throw new Error(
+	throw new AgentProtocolError(
+		'iteration-limit',
+		'discover',
 		`Discover agent exceeded maxIterations (${maxIterations}) without calling report_findings`
 	);
 }

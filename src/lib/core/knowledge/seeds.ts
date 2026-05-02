@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { seeds } from '../db/schema';
 import { generateId } from '../db/id';
 import type { Database } from '../db/connection';
+import { ValidationError } from '../errors/types';
 
 export type SeedType = 'freeform' | 'briefing_card';
 export type SeedOrigin = 'user' | 'journalist';
@@ -89,7 +90,7 @@ export async function completeSeed(
 	failures?: SeedFailure[]
 ): Promise<void> {
 	const seed = await getSeed(db, seedId);
-	if (!seed) throw new Error(`Seed not found: ${seedId}`);
+	if (!seed) throw new ValidationError('run-state', `Seed not found: ${seedId}`);
 
 	const hasFailures = failures !== undefined && failures.length > 0;
 	let status: SeedStatus;

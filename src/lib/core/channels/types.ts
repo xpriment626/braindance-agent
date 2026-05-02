@@ -31,8 +31,10 @@ export class ChannelUnavailableError extends Error {
 	constructor(
 		public readonly channel: string,
 		public readonly mcpServer: string,
-		public readonly reason: string
+		public readonly reason: string,
+		public readonly statusCode?: number
 	) {
 		super(`channel "${channel}" unavailable: mcp_server "${mcpServer}" ${reason}`);
+		this.name = 'ChannelUnavailableError';
 	}
 }

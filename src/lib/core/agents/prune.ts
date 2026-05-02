@@ -1,6 +1,7 @@
 import type { LLMProvider, ChatMessage, ToolDef, ToolCall } from './llm';
 import type { TopicContext } from './types';
 import type { Signal } from '../knowledge/signals';
+import { AgentProtocolError } from '../errors/types';
 
 export interface PruneInput {
 	topic: TopicContext;
@@ -147,7 +148,9 @@ export async function runPrune(
 		}
 	}
 
-	throw new Error(
+	throw new AgentProtocolError(
+		'iteration-limit',
+		'prune',
 		`Prune agent exceeded maxIterations (${maxIterations}) without calling submit_prune_log`
 	);
 }

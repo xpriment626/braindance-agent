@@ -16,6 +16,13 @@ import {
 	failWorkflowRun
 } from './runs';
 import { persistAuditSignals } from './persistAuditSignals';
+import { ValidationError } from '../errors/types';
+import { normalizeError } from '../errors/normalize';
+import {
+	createAgentRun,
+	completeAgentRun,
+	failAgentRun
+} from '../agents/runs';
 import type { RunChannelOverride } from '../channels/resolve';
 
 export interface WorkflowConfig {
@@ -40,7 +47,7 @@ export async function addKnowledge(
 	options: AddKnowledgeOptions
 ): Promise<AddKnowledgeResult> {
 	const topic = await getTopic(db, topicId);
-	if (!topic) throw new Error(`topic "${topicId}" not found`);
+	if (!topic) throw new ValidationError('topic-not-found', `topic "${topicId}" not found`);
 
 	const topicContext: TopicContext = toTopicContext(topic);
 	const corpusSources = await loadCorpus(db, topicId);
@@ -52,20 +59,42 @@ export async function addKnowledge(
 	});
 
 	try {
-		const discoverOutput = await runDiscover(
-			options.llm,
-			options.channels,
-			{
+		// Discover: wrap in agent_runs row so per-agent failures are surfaced
+		// for triage even when the outer workflow_run row also captures them.
+		const discoverRun = await createAgentRun(db, {
+			agentType: 'discover',
+			topicId,
+			workflowRunId: run.id
+		});
+		let discoverOutput;
+		try {
+			discoverOutput = await runDiscover(options.llm, options.channels, {
 				topic: topicContext,
 				existingCorpus: corpusSources,
 				channelConfig: resolveChannelConfigFromWorkflow(options.channels, options.config)
-			}
-		);
+			});
+			await completeAgentRun(db, discoverRun.id);
+		} catch (e) {
+			await failAgentRun(db, discoverRun.id, normalizeError(e, { agent: 'discover' }));
+			throw e;
+		}
 
-		const auditOutput = await runAudit(options.llm, {
-			topic: topicContext,
-			corpus: corpusSources
+		const auditRun = await createAgentRun(db, {
+			agentType: 'audit',
+			topicId,
+			workflowRunId: run.id
 		});
+		let auditOutput;
+		try {
+			auditOutput = await runAudit(options.llm, {
+				topic: topicContext,
+				corpus: corpusSources
+			});
+			await completeAgentRun(db, auditRun.id);
+		} catch (e) {
+			await failAgentRun(db, auditRun.id, normalizeError(e, { agent: 'audit' }));
+			throw e;
+		}
 
 		const newSources: DiscoveredSourceProposal[] = discoverOutput.discoveredSources.map(
 			(s) => ({
@@ -94,8 +123,7 @@ export async function addKnowledge(
 
 		return { workflowRunId: run.id, discoveryReportId: report.id };
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		await failWorkflowRun(db, run.id, message);
+		await failWorkflowRun(db, run.id, normalizeError(error));
 		throw error;
 	}
 }

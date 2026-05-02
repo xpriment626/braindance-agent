@@ -4,6 +4,7 @@ import type { TopicContext } from '../agents/types';
 import { getTopic } from '../knowledge/topics';
 import { deleteSource } from '../knowledge/sources';
 import { getSignal, applySignal, type Signal } from '../knowledge/signals';
+import { ValidationError } from '../errors/types';
 import {
 	runPrune,
 	type PruneMutationTools,
@@ -15,6 +16,12 @@ import {
 	failWorkflowRun
 } from './runs';
 import type { WorkflowConfig } from './addKnowledge';
+import { normalizeError } from '../errors/normalize';
+import {
+	createAgentRun,
+	completeAgentRun,
+	failAgentRun
+} from '../agents/runs';
 
 export interface PruneCorpusOptions {
 	llm: LLMProvider;
@@ -33,7 +40,7 @@ export async function pruneCorpus(
 	options: PruneCorpusOptions
 ): Promise<PruneCorpusResult> {
 	const topic = await getTopic(db, topicId);
-	if (!topic) throw new Error(`topic "${topicId}" not found`);
+	if (!topic) throw new ValidationError('topic-not-found', `topic "${topicId}" not found`);
 
 	const resolvedSignals = await resolveApprovedSignals(db, topicId, approvedSignalIds);
 
@@ -67,11 +74,22 @@ export async function pruneCorpus(
 			}
 		};
 
-		const log = await runPrune(
-			options.llm,
-			mutations,
-			{ topic: topicContext, approvedSignals: resolvedSignals }
-		);
+		const pruneRun = await createAgentRun(db, {
+			agentType: 'prune',
+			topicId,
+			workflowRunId: run.id
+		});
+		let log;
+		try {
+			log = await runPrune(options.llm, mutations, {
+				topic: topicContext,
+				approvedSignals: resolvedSignals
+			});
+			await completeAgentRun(db, pruneRun.id);
+		} catch (e) {
+			await failAgentRun(db, pruneRun.id, normalizeError(e, { agent: 'prune' }));
+			throw e;
+		}
 
 		for (const mutation of log.appliedMutations) {
 			await applySignal(db, mutation.signalId);
@@ -80,8 +98,7 @@ export async function pruneCorpus(
 		await completeWorkflowRun(db, run.id);
 		return { workflowRunId: run.id, log };
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		await failWorkflowRun(db, run.id, message);
+		await failWorkflowRun(db, run.id, normalizeError(error));
 		throw error;
 	}
 }
@@ -94,14 +111,16 @@ async function resolveApprovedSignals(
 	const resolved: Signal[] = [];
 	for (const id of signalIds) {
 		const signal = await getSignal(db, id);
-		if (!signal) throw new Error(`signal "${id}" not found`);
+		if (!signal) throw new ValidationError('run-state', `signal "${id}" not found`);
 		if (signal.topicId !== topicId) {
-			throw new Error(
+			throw new ValidationError(
+				'signal-ownership',
 				`signal "${id}" belongs to topic "${signal.topicId}", expected "${topicId}"`
 			);
 		}
 		if (signal.status !== 'approved') {
-			throw new Error(
+			throw new ValidationError(
+				'run-state',
 				`signal "${id}" is ${signal.status}, expected approved`
 			);
 		}

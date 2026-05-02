@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { signals } from '../db/schema';
 import { generateId } from '../db/id';
 import type { Database } from '../db/connection';
+import { ValidationError } from '../errors/types';
 
 export type SignalStatus = 'pending' | 'approved' | 'applied' | 'dismissed';
 export type SignalTargetType = 'source' | 'thread';
@@ -113,9 +114,10 @@ async function requireSignalWithStatus(
 	requiredStatus: SignalStatus
 ): Promise<Signal> {
 	const existing = await getSignal(db, id);
-	if (!existing) throw new Error(`signal "${id}" not found`);
+	if (!existing) throw new ValidationError('run-state', `signal "${id}" not found`);
 	if (existing.status !== requiredStatus) {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`signal "${id}" is ${existing.status}, expected ${requiredStatus}`
 		);
 	}
@@ -130,7 +132,7 @@ export async function approveSignal(db: Database, id: string): Promise<Signal> {
 		.set({ status: 'approved', resolvedAt })
 		.where(eq(signals.id, id));
 	const updated = await getSignal(db, id);
-	if (!updated) throw new Error(`signal "${id}" vanished after approve`);
+	if (!updated) throw new ValidationError('run-state', `signal "${id}" vanished after approve`);
 	return updated;
 }
 
@@ -146,7 +148,7 @@ export async function dismissSignal(
 		.set({ status: 'dismissed', reason, resolvedAt })
 		.where(eq(signals.id, id));
 	const updated = await getSignal(db, id);
-	if (!updated) throw new Error(`signal "${id}" vanished after dismiss`);
+	if (!updated) throw new ValidationError('run-state', `signal "${id}" vanished after dismiss`);
 	return updated;
 }
 
@@ -154,6 +156,6 @@ export async function applySignal(db: Database, id: string): Promise<Signal> {
 	await requireSignalWithStatus(db, id, 'approved');
 	await db.update(signals).set({ status: 'applied' }).where(eq(signals.id, id));
 	const updated = await getSignal(db, id);
-	if (!updated) throw new Error(`signal "${id}" vanished after apply`);
+	if (!updated) throw new ValidationError('run-state', `signal "${id}" vanished after apply`);
 	return updated;
 }

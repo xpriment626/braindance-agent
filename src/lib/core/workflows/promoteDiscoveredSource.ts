@@ -15,6 +15,7 @@ import {
 } from '../knowledge/seeds';
 import { createSource, type Source } from '../knowledge/sources';
 import { generateId } from '../db/id';
+import { ValidationError } from '../errors/types';
 
 export interface OpenDiscoveryReportForReviewResult {
 	report: DiscoveryReport;
@@ -36,14 +37,18 @@ export async function openDiscoveryReportForReview(
 	reportId: string
 ): Promise<OpenDiscoveryReportForReviewResult> {
 	const report = await getDiscoveryReport(db, reportId);
-	if (!report) throw new Error(`discovery_report "${reportId}" not found`);
+	if (!report) throw new ValidationError('run-state', `discovery_report "${reportId}" not found`);
 	if (report.status !== 'pending') {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`discovery_report "${reportId}" is ${report.status}, expected pending`
 		);
 	}
 	if (report.newSources.length === 0) {
-		throw new Error(`discovery_report "${reportId}" has no proposals to review`);
+		throw new ValidationError(
+			'run-state',
+			`discovery_report "${reportId}" has no proposals to review`
+		);
 	}
 
 	const existing = await getSeedByDiscoveryReport(db, reportId);
@@ -86,21 +91,24 @@ export async function acceptDiscoveredSource(
 ): Promise<Source> {
 	const seed = await getSeedByDiscoveryReport(db, reportId);
 	if (!seed) {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`discovery_report "${reportId}" has no open review — call openDiscoveryReportForReview first`
 		);
 	}
 	const report = await getDiscoveryReport(db, reportId);
-	if (!report) throw new Error(`discovery_report "${reportId}" not found`);
+	if (!report) throw new ValidationError('run-state', `discovery_report "${reportId}" not found`);
 
 	const proposal = report.newSources[proposalIndex];
 	if (!proposal) {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`proposal index ${proposalIndex} out of bounds (report has ${report.newSources.length} proposals)`
 		);
 	}
 	if (proposal.status !== 'pending') {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`proposal ${proposalIndex} already ${proposal.status} — cannot accept`
 		);
 	}
@@ -134,21 +142,24 @@ export async function declineDiscoveredSource(
 ): Promise<void> {
 	const seed = await getSeedByDiscoveryReport(db, reportId);
 	if (!seed) {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`discovery_report "${reportId}" has no open review — call openDiscoveryReportForReview first`
 		);
 	}
 	const report = await getDiscoveryReport(db, reportId);
-	if (!report) throw new Error(`discovery_report "${reportId}" not found`);
+	if (!report) throw new ValidationError('run-state', `discovery_report "${reportId}" not found`);
 
 	const proposal = report.newSources[proposalIndex];
 	if (!proposal) {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`proposal index ${proposalIndex} out of bounds (report has ${report.newSources.length} proposals)`
 		);
 	}
 	if (proposal.status !== 'pending') {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`proposal ${proposalIndex} already ${proposal.status} — cannot decline`
 		);
 	}

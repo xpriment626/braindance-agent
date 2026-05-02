@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { ValidationError } from './errors/types';
 
 export interface PlatformInfo {
 	platform: NodeJS.Platform;
@@ -14,7 +15,7 @@ export function resolveDataDir(info: PlatformInfo): string {
 		case 'darwin':
 			return path.posix.join(info.home, 'Library', 'Application Support', 'braindance');
 		case 'win32':
-			if (!info.appData) throw new Error('APPDATA env required on win32');
+			if (!info.appData) throw new ValidationError('env', 'APPDATA env required on win32');
 			return path.win32.join(info.appData, 'braindance');
 		default: {
 			const xdg = process.env.XDG_DATA_HOME;
@@ -30,7 +31,7 @@ export function resolveConfigDir(info: PlatformInfo): string {
 		case 'darwin':
 			return path.posix.join(info.home, 'Library', 'Application Support', 'braindance');
 		case 'win32':
-			if (!info.appData) throw new Error('APPDATA env required on win32');
+			if (!info.appData) throw new ValidationError('env', 'APPDATA env required on win32');
 			return path.win32.join(info.appData, 'braindance');
 		default: {
 			const xdg = process.env.XDG_CONFIG_HOME;

@@ -3,6 +3,7 @@ import { discoveryReports } from '../db/schema';
 import { generateId } from '../db/id';
 import type { Database } from '../db/connection';
 import { getSeedByDiscoveryReport, deleteSeed } from './seeds';
+import { ValidationError } from '../errors/types';
 
 export type DiscoveryReportStatus = 'pending' | 'reviewed' | 'dismissed';
 export type DiscoveredSourceProposalStatus = 'pending' | 'accepted' | 'declined';
@@ -118,9 +119,10 @@ export async function listDiscoveryReportsByTopic(
 
 async function requirePendingReport(db: Database, id: string): Promise<DiscoveryReport> {
 	const existing = await getDiscoveryReport(db, id);
-	if (!existing) throw new Error(`discovery_report "${id}" not found`);
+	if (!existing) throw new ValidationError('run-state', `discovery_report "${id}" not found`);
 	if (existing.status !== 'pending') {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`discovery_report "${id}" is ${existing.status}, expected pending`
 		);
 	}
@@ -138,7 +140,7 @@ export async function reviewDiscoveryReport(
 		.set({ status: 'reviewed', reviewedAt })
 		.where(eq(discoveryReports.id, id));
 	const updated = await getDiscoveryReport(db, id);
-	if (!updated) throw new Error(`discovery_report "${id}" vanished after review`);
+	if (!updated) throw new ValidationError('run-state', `discovery_report "${id}" vanished after review`);
 	return updated;
 }
 
@@ -161,7 +163,8 @@ export async function dismissDiscoveryReport(
 
 	const alreadyAccepted = existing.newSources.some((p) => p.status === 'accepted');
 	if (alreadyAccepted) {
-		throw new Error(
+		throw new ValidationError(
+			'run-state',
 			`discovery_report "${id}" has accepted proposals — dismiss is only valid before any acceptance. Decline remaining proposals instead.`
 		);
 	}
@@ -177,6 +180,6 @@ export async function dismissDiscoveryReport(
 		.set({ status: 'dismissed', reviewedAt })
 		.where(eq(discoveryReports.id, id));
 	const updated = await getDiscoveryReport(db, id);
-	if (!updated) throw new Error(`discovery_report "${id}" vanished after dismiss`);
+	if (!updated) throw new ValidationError('run-state', `discovery_report "${id}" vanished after dismiss`);
 	return updated;
 }

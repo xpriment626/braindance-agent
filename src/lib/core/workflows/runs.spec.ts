@@ -93,15 +93,25 @@ describe('workflow_runs lifecycle', () => {
 		await expect(completeWorkflowRun(db, run.id)).rejects.toThrow();
 	});
 
-	it('failWorkflowRun moves any non-terminal → failed with error stored', async () => {
+	it('failWorkflowRun moves any non-terminal → failed with structured error stored', async () => {
 		const run = await createWorkflowRun(db, {
 			type: 'add_knowledge',
 			topicId: 'topic-1',
 			config: null
 		});
-		const failed = await failWorkflowRun(db, run.id, 'discover LLM timed out');
+		const failed = await failWorkflowRun(db, run.id, {
+			category: 'agent',
+			code: 'AGENT_ITERATION_LIMIT',
+			message: 'discover LLM timed out',
+			agent: 'discover'
+		});
 		expect(failed.status).toBe('failed');
-		expect(failed.error).toBe('discover LLM timed out');
+		expect(failed.error).toEqual({
+			category: 'agent',
+			code: 'AGENT_ITERATION_LIMIT',
+			message: 'discover LLM timed out',
+			agent: 'discover'
+		});
 		expect(failed.completedAt).toBeTruthy();
 	});
 
@@ -111,8 +121,14 @@ describe('workflow_runs lifecycle', () => {
 			topicId: 'topic-1',
 			config: null
 		});
-		await failWorkflowRun(db, run.id, 'boom');
-		await expect(failWorkflowRun(db, run.id, 'again')).rejects.toThrow();
+		await failWorkflowRun(db, run.id, {
+			category: 'fatal',
+			code: 'INTERNAL',
+			message: 'boom'
+		});
+		await expect(
+			failWorkflowRun(db, run.id, { category: 'fatal', code: 'INTERNAL', message: 'again' })
+		).rejects.toThrow();
 	});
 
 	it('listWorkflowRunsByTopic filters by topic', async () => {
