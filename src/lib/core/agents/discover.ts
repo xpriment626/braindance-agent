@@ -2,6 +2,7 @@ import type { LLMProvider, ChatMessage, ToolDef, ToolCall } from './llm';
 import type { DiscoverInput, DiscoverOutput, DiscoveredSource } from './types';
 import type { Channel, SearchResult, ExtractedContent } from '../channels/types';
 import { AgentProtocolError } from '../errors/types';
+import { debug } from '../debug';
 
 export interface RunDiscoverOptions {
 	model?: string;
@@ -167,11 +168,19 @@ export async function runDiscover(
 	const distinctSearchQueries = new Set<string>();
 
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
+		debug('discover', 'iter-start', { iter: iteration, model });
+		const t0 = Date.now();
 		const result = await llm.generate({
 			model,
 			system: DISCOVER_SYSTEM_PROMPT,
 			messages,
 			tools
+		});
+		debug('discover', 'iter-llm-done', {
+			iter: iteration,
+			elapsedMs: Date.now() - t0,
+			stopReason: result.stopReason,
+			toolCalls: result.toolCalls.length
 		});
 
 		if (result.toolCalls.length === 0) {
@@ -189,6 +198,7 @@ export async function runDiscover(
 		});
 
 		for (const call of result.toolCalls) {
+			debug('discover', 'tool-call', { iter: iteration, name: call.name });
 			if (call.name === 'report_findings') {
 				const reported = Array.isArray(call.input.discoveredSources)
 					? call.input.discoveredSources

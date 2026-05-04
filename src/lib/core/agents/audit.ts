@@ -1,6 +1,7 @@
 import type { LLMProvider, ChatMessage, ToolDef, ToolCall } from './llm';
 import type { AuditInput, AuditOutput, AuditSignal, GapAnalysis, ConsolidationSuggestion } from './types';
 import { AgentProtocolError } from '../errors/types';
+import { debug } from '../debug';
 
 export interface RunAuditOptions {
 	model?: string;
@@ -104,11 +105,19 @@ export async function runAudit(
 	];
 
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
+		debug('audit', 'iter-start', { iter: iteration, model });
+		const t0 = Date.now();
 		const result = await llm.generate({
 			model,
 			system: AUDIT_SYSTEM_PROMPT,
 			messages,
 			tools: [SUBMIT_AUDIT_TOOL]
+		});
+		debug('audit', 'iter-llm-done', {
+			iter: iteration,
+			elapsedMs: Date.now() - t0,
+			stopReason: result.stopReason,
+			toolCalls: result.toolCalls.length
 		});
 
 		const submitCall = result.toolCalls.find((c) => c.name === 'submit_audit');
