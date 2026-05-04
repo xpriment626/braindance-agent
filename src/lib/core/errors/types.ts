@@ -15,6 +15,13 @@ export class OpenRouterError extends Error {
 	}
 }
 
+export class OpenRouterTimeoutError extends Error {
+	constructor(public readonly timeoutMs: number) {
+		super(`OpenRouter request timed out after ${timeoutMs}ms`);
+		this.name = 'OpenRouterTimeoutError';
+	}
+}
+
 export type OpenRouterMalformedKind = 'not-object' | 'no-choices' | 'choice-not-object';
 
 export class OpenRouterMalformedResponseError extends Error {

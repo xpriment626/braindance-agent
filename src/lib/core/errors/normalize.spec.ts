@@ -3,6 +3,7 @@ import { normalizeError, setNormalizeLogger } from './normalize';
 import {
 	OpenRouterError,
 	OpenRouterMalformedResponseError,
+	OpenRouterTimeoutError,
 	McpNotConfiguredError,
 	AgentProtocolError,
 	ValidationError
@@ -64,6 +65,15 @@ describe('normalizeError — OpenRouterError dispatch', () => {
 		expect(r.category).toBe('transient');
 		expect(r.code).toBe('OPENROUTER_MALFORMED_RESPONSE');
 		expect(r.source).toEqual({ kind: 'llm', name: 'openrouter' });
+	});
+
+	it('maps OpenRouterTimeoutError to OPENROUTER_TIMEOUT (transient) with retry hint', () => {
+		const r = normalizeError(new OpenRouterTimeoutError(180000));
+		expect(r.category).toBe('transient');
+		expect(r.code).toBe('OPENROUTER_TIMEOUT');
+		expect(r.source).toEqual({ kind: 'llm', name: 'openrouter' });
+		expect(r.message).toContain('180000');
+		expect(r.hint).toContain('Retry');
 	});
 });
 

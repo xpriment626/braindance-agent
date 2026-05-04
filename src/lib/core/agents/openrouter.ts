@@ -7,7 +7,12 @@ import type {
 	ToolCall,
 	ToolDef
 } from './llm';
-import { OpenRouterError, OpenRouterMalformedResponseError } from '../errors/types';
+import {
+	OpenRouterError,
+	OpenRouterMalformedResponseError,
+	OpenRouterTimeoutError
+} from '../errors/types';
+import { debug } from '../debug';
 
 export interface OpenRouterOptions {
 	apiKey: string;
@@ -17,6 +22,8 @@ export interface OpenRouterOptions {
 	// Injectable for testing; defaults to setTimeout-based sleep. Used by the
 	// 429/5xx retry mechanic.
 	sleep?: (ms: number) => Promise<void>;
+	// Per-call timeout in ms. Defaults to 120s.
+	timeoutMs?: number;
 	// Sent as OpenRouter attribution headers (optional but encouraged).
 	appName?: string;
 	appUrl?: string;
@@ -25,6 +32,13 @@ export interface OpenRouterOptions {
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_429_BACKOFF_MS = 1000;
 const DEFAULT_5XX_BACKOFF_MS = 2000;
+// Per-call timeout. Long enough for cold-starts on big models (Opus/Sonnet)
+// or slow tool-call generations on K2.6 — but short enough that a stuck
+// connection surfaces as a transient error instead of an indefinite hang.
+// AbortSignal-based: aborts the underlying fetch (including body read) and
+// is categorized by normalizeError as a transient OpenRouter error, so the
+// UI shows "Retry?" rather than treating it as a config failure.
+const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
 
 const defaultSleep = (ms: number): Promise<void> =>
 	new Promise((resolve) => setTimeout(resolve, ms));
@@ -33,6 +47,7 @@ export function createOpenRouterProvider(opts: OpenRouterOptions): LLMProvider {
 	const fetchImpl = opts.fetch ?? fetch;
 	const sleep = opts.sleep ?? defaultSleep;
 	const baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
+	const timeoutMs = opts.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
 	return {
 		async generate(params: GenerateParams): Promise<GenerateResult> {
@@ -51,7 +66,14 @@ export function createOpenRouterProvider(opts: OpenRouterOptions): LLMProvider {
 				body: JSON.stringify(body)
 			};
 
-			const response = await fetchWithRetry(fetchImpl, url, requestInit, sleep);
+			debug('openrouter', 'fetch-start', { model: params.model, timeoutMs });
+			const t0 = Date.now();
+			const response = await fetchWithRetry(fetchImpl, url, requestInit, sleep, timeoutMs);
+			debug('openrouter', 'fetch-done', {
+				model: params.model,
+				elapsedMs: Date.now() - t0,
+				status: response.status
+			});
 
 			if (!response.ok) {
 				const text = await response.text();
@@ -79,14 +101,50 @@ async function fetchWithRetry(
 	fetchImpl: typeof fetch,
 	url: string,
 	init: RequestInit,
-	sleep: (ms: number) => Promise<void>
+	sleep: (ms: number) => Promise<void>,
+	timeoutMs: number
 ): Promise<Response> {
-	const first = await fetchImpl(url, init);
+	const first = await fetchWithTimeout(fetchImpl, url, init, timeoutMs);
 	if (!shouldRetry(first.status)) return first;
 
 	const backoff = computeBackoff(first);
 	await sleep(backoff);
-	return fetchImpl(url, init);
+	return fetchWithTimeout(fetchImpl, url, init, timeoutMs);
+}
+
+async function fetchWithTimeout(
+	fetchImpl: typeof fetch,
+	url: string,
+	init: RequestInit,
+	timeoutMs: number
+): Promise<Response> {
+	// Compose any caller-supplied signal with our timeout signal so both can
+	// cancel. AbortSignal.timeout() throws DOMException("TimeoutError") when
+	// it fires; we catch and re-throw as OpenRouterTimeoutError so it's
+	// instanceof-dispatchable in normalizeError (categorized transient with
+	// a "retry might work" hint, not buried as INTERNAL).
+	const timeoutSignal = AbortSignal.timeout(timeoutMs);
+	const signal =
+		init.signal !== undefined && init.signal !== null
+			? AbortSignal.any([init.signal, timeoutSignal])
+			: timeoutSignal;
+	try {
+		return await fetchImpl(url, { ...init, signal });
+	} catch (e) {
+		if (isTimeoutAbort(e, timeoutSignal)) {
+			throw new OpenRouterTimeoutError(timeoutMs);
+		}
+		throw e;
+	}
+}
+
+function isTimeoutAbort(e: unknown, timeoutSignal: AbortSignal): boolean {
+	// The DOMException raised by AbortSignal.timeout has name === 'TimeoutError'.
+	// Some runtimes raise a generic AbortError when our signal aborts — fall
+	// back to checking the signal's own state to be safe.
+	if (e instanceof Error && e.name === 'TimeoutError') return true;
+	if (e instanceof Error && e.name === 'AbortError' && timeoutSignal.aborted) return true;
+	return false;
 }
 
 function shouldRetry(status: number): boolean {

@@ -13,6 +13,7 @@ import { isValidWorkflowRunError } from './contract';
 import {
 	OpenRouterError,
 	OpenRouterMalformedResponseError,
+	OpenRouterTimeoutError,
 	McpNotConfiguredError,
 	AgentProtocolError,
 	ValidationError,
@@ -59,6 +60,7 @@ export function normalizeError(e: unknown, ctx?: NormalizeContext): WorkflowRunE
 function dispatch(e: unknown, ctx?: NormalizeContext): WorkflowRunError {
 	// Typed subclass dispatch.
 	if (e instanceof OpenRouterError) return fromOpenRouter(e, ctx);
+	if (e instanceof OpenRouterTimeoutError) return fromOpenRouterTimeout(e, ctx);
 	if (e instanceof OpenRouterMalformedResponseError) return fromOpenRouterMalformed(e, ctx);
 	if (e instanceof ChannelUnavailableError) return fromChannelUnavailable(e, ctx);
 	if (e instanceof McpNotConfiguredError) return fromMcpNotConfigured(e, ctx);
@@ -120,6 +122,22 @@ function fromOpenRouterMalformed(
 			code: 'OPENROUTER_MALFORMED_RESPONSE',
 			message: e.message,
 			source: { kind: 'llm', name: 'openrouter' }
+		},
+		ctx
+	);
+}
+
+function fromOpenRouterTimeout(
+	e: OpenRouterTimeoutError,
+	ctx?: NormalizeContext
+): WorkflowRunError {
+	return withAgent(
+		{
+			category: 'transient',
+			code: 'OPENROUTER_TIMEOUT',
+			message: e.message,
+			source: { kind: 'llm', name: 'openrouter' },
+			hint: 'Provider held the connection open without sending the body. Retry; if it persists, try a different model in capabilities.discover.model.'
 		},
 		ctx
 	);
