@@ -136,17 +136,10 @@ export async function processBriefingCard(
 	card: BriefingCard,
 	config: ProcessConfig
 ): Promise<{ seedId: string; topicId: string }> {
-	// File inputs are not yet supported via briefing cards (Phase 2 deferred
-	// the UI-side upload path; core handleFile exists but needs a caller to
-	// materialize the file on disk first).
-	for (const input of card.inputs) {
-		if (input.type === 'file') {
-			throw new ValidationError(
-				'briefing-card',
-				'File inputs are not yet supported via briefing cards (deferred). Use freeform processSeed or wait for UI file-upload support.'
-			);
-		}
-	}
+	// File inputs are accepted: `value` must be an absolute path on disk that
+	// the caller has materialized (and is responsible for cleaning up). The
+	// existing handleFile copies that path to files/{sourceId}/original.{ext}
+	// before the temp file is deleted by the caller.
 
 	let resolvedTopicId: string;
 	if (topicId === null) {

@@ -69,7 +69,9 @@ export type ValidationKind =
 	| 'run-state'
 	| 'signal-ownership'
 	| 'config'
-	| 'env';
+	| 'env'
+	| 'file-type-rejected'
+	| 'file-too-large';
 
 export class ValidationError extends Error {
 	constructor(public readonly kind: ValidationKind, message: string) {

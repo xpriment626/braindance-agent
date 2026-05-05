@@ -251,17 +251,23 @@ describe('processBriefingCard', () => {
 		).rejects.toThrow(/name/);
 	});
 
-	it('rejects file inputs (deferred in slice 3.5)', async () => {
-		await expect(
-			processBriefingCard(
-				db,
-				topicId,
-				{
-					inputs: [{ type: 'file', value: '/some/path.md' }]
-				},
-				{ filesDir: '/tmp/files' }
-			)
-		).rejects.toThrow(/not yet supported/);
+	it('accepts file inputs as on-disk paths (Phase A.2 — caller materializes)', async () => {
+		// File inputs now flow through handleFile, which expects a real path on
+		// disk. We pass an obviously-missing path and assert the failure path
+		// surfaces as a per-input failure on the seed (not a thrown error from
+		// the briefing-card flow itself).
+		const result = await processBriefingCard(
+			db,
+			topicId,
+			{
+				inputs: [{ type: 'file', value: '/nonexistent/path.md' }]
+			},
+			{ filesDir: '/tmp/files' }
+		);
+		expect(result.seedId).toBeTruthy();
+		// runInputPipeline catches handler failures and stores them in seeds.failures.
+		// We don't introspect that here — the lifecycle test covers it. Just confirm
+		// the briefing-card flow itself didn't throw on seeing a 'file' input.
 	});
 
 	it('updates topic name and description when provided', async () => {

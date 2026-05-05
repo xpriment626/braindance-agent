@@ -197,7 +197,9 @@ function fromValidation(e: ValidationError, ctx?: NormalizeContext): WorkflowRun
 		'run-state': 'VALIDATION_RUN_STATE',
 		'signal-ownership': 'VALIDATION_SIGNAL_OWNERSHIP',
 		config: 'VALIDATION_CONFIG',
-		env: 'VALIDATION_ENV'
+		env: 'VALIDATION_ENV',
+		'file-type-rejected': 'VALIDATION_FILE_TYPE_REJECTED',
+		'file-too-large': 'VALIDATION_FILE_TOO_LARGE'
 	};
 	// 'env' kind is infrastructure — categorize as fatal so UI doesn't tell
 	// users to fix their input when it's actually their environment.
