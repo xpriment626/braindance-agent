@@ -10,6 +10,7 @@ import type {
 
 export interface ResolveInput {
 	user?: PartialBraindanceConfig | null;
+	settings?: PartialBraindanceConfig | null;
 	project?: PartialBraindanceConfig | null;
 	run?: PartialBraindanceConfig | null;
 }
@@ -17,9 +18,12 @@ export interface ResolveInput {
 type CapabilityName = keyof BraindanceConfig['capabilities'];
 
 export function resolveConfig(input: ResolveInput): BraindanceConfig {
-	// Order lowest → highest priority
+	// Order lowest → highest priority. The `settings` layer sits between
+	// `user` (config.yaml on disk) and `project` (per-project overrides) — it
+	// represents user-controlled values written via the in-app Settings UI.
 	const layers: PartialBraindanceConfig[] = [
 		input.user,
+		input.settings,
 		input.project,
 		input.run
 	].filter((l): l is PartialBraindanceConfig => l != null);

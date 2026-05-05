@@ -11,6 +11,12 @@ export const registryProjects = sqliteTable('projects', {
 	updatedAt: text('updated_at').notNull()
 });
 
+export const appSettings = sqliteTable('app_settings', {
+	key: text('key').primaryKey(),
+	value: text('value').notNull(),
+	updatedAt: text('updated_at').notNull()
+});
+
 export async function initRegistryDb(db: Database): Promise<void> {
 	await db.run(sql`CREATE TABLE IF NOT EXISTS projects (
 		id TEXT PRIMARY KEY,
@@ -18,6 +24,11 @@ export async function initRegistryDb(db: Database): Promise<void> {
 		path TEXT NOT NULL,
 		config TEXT,
 		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`);
+	await db.run(sql`CREATE TABLE IF NOT EXISTS app_settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	)`);
 }
