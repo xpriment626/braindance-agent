@@ -6,21 +6,45 @@ import { listTopics } from '$lib/core/knowledge/topics';
 // internal API routes. Mutations live in `+page.server.ts` actions on the
 // pages that own them.
 
-export const load: LayoutServerLoad = async () => {
-	const { handle, availableProjects } = await getCurrentProject();
+interface AvailableProject {
+	id: string;
+	name: string;
+	displayName: string;
+}
+
+function withDisambiguation(
+	entries: Array<{ id: string; name: string }>
+): AvailableProject[] {
+	const counts = new Map<string, number>();
+	for (const e of entries) counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
+	return entries.map((e) => ({
+		...e,
+		displayName:
+			(counts.get(e.name) ?? 0) > 1 ? `${e.name} · ${e.id.slice(-4)}` : e.name
+	}));
+}
+
+export const load: LayoutServerLoad = async ({ cookies }) => {
+	const { handle, availableProjects } = await getCurrentProject(cookies);
+	const projects = withDisambiguation(availableProjects);
 
 	if (!handle) {
 		return {
 			project: null,
-			availableProjects,
+			availableProjects: projects,
 			topics: []
 		};
 	}
 
 	const topics = await listTopics(handle.db);
+	const current = projects.find((p) => p.id === handle.id);
 	return {
-		project: { id: handle.id, name: handle.name },
-		availableProjects,
+		project: {
+			id: handle.id,
+			name: handle.name,
+			displayName: current?.displayName ?? handle.name
+		},
+		availableProjects: projects,
 		topics: topics.map((t) => ({ id: t.id, name: t.name }))
 	};
 };

@@ -7,18 +7,63 @@
 	const project = $derived(data.project);
 	const stats = $derived(data.stats);
 	const topics = $derived(data.topics);
+	const openrouterKeyAvailable = $derived(data.openrouterKeyAvailable);
 
 	let runningTopicId = $state<string | null>(null);
 </script>
 
 {#if !project}
-	<section class="px-9 py-7">
-		<h1 class="text-[28px] font-semibold tracking-tight text-midnight">No project yet</h1>
-		<p class="mt-2 max-w-md text-sm text-dusk">
-			Create a project via the Braindance CLI, or set
-			<code class="rounded bg-cloud px-1 py-0.5 text-[12px]">BRAINDANCE_PROJECT_ID</code>
-			to point at an existing one.
-		</p>
+	<section class="flex min-h-screen flex-col items-center justify-center gap-6 px-9 py-7">
+		<div class="flex max-w-md flex-col gap-3 text-center">
+			<h1 class="text-[32px] font-semibold leading-tight tracking-tight text-midnight">
+				Welcome to Braindance
+			</h1>
+			<p class="text-sm text-dusk">
+				A workspace for evolving knowledge bases on topics that matter to you.
+			</p>
+		</div>
+
+		<form
+			method="POST"
+			action="?/createProject"
+			class="flex w-full max-w-md flex-col gap-3 rounded-xl border border-border bg-card-bg p-5"
+		>
+			<label class="flex flex-col gap-1.5">
+				<span class="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+					Project name
+				</span>
+				<input
+					type="text"
+					name="name"
+					required
+					maxlength="64"
+					autocomplete="off"
+					placeholder="Personal KB"
+					value={form && 'formData' in form && form.formData?.name ? form.formData.name : ''}
+					class="rounded-lg border border-border bg-page-bg px-3 py-2 text-sm text-midnight outline-none focus:border-dusk"
+				/>
+			</label>
+
+			{#if form?.error}
+				<div
+					class="rounded-lg border border-red-thread/30 bg-red-thread/5 px-3 py-2 text-[12px] text-red-thread"
+				>
+					<div class="font-mono text-[10px] font-semibold uppercase tracking-wider">
+						{form.error.code}
+					</div>
+					<div class="mt-0.5 text-midnight">{form.error.message}</div>
+				</div>
+			{/if}
+
+			<div class="flex justify-end">
+				<button
+					type="submit"
+					class="rounded-lg bg-midnight px-4 py-2 text-sm font-medium text-cloud hover:opacity-90"
+				>
+					Create project
+				</button>
+			</div>
+		</form>
 	</section>
 {:else}
 	<section class="flex flex-col gap-6 px-9 pb-8 pt-7">
@@ -79,6 +124,25 @@
 				{/if}
 			</div>
 		</header>
+
+		{#if !openrouterKeyAvailable}
+			<div
+				class="flex items-center justify-between gap-4 rounded-lg border border-starlight bg-starlight/40 px-4 py-3 text-sm text-midnight"
+			>
+				<div>
+					<div class="font-medium">OpenRouter key not set</div>
+					<div class="text-[12px] text-dusk">
+						Agents won't run until you add a key.
+					</div>
+				</div>
+				<a
+					href="/settings"
+					class="rounded-md border border-border bg-card-bg px-3 py-1.5 text-[12px] font-medium text-midnight hover:bg-cloud"
+				>
+					Open Settings →
+				</a>
+			</div>
+		{/if}
 
 		{#if form?.error}
 			<div
