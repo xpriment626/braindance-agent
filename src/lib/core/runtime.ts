@@ -102,7 +102,7 @@ export async function buildRuntime(config: BraindanceConfig): Promise<Runtime> {
 		if (!apiKey) {
 			throw new ValidationError(
 				'config',
-				`OpenRouter API key not set — add providers.${discoverCap.provider}.api_key to config.yaml or set OPENROUTER_API_KEY`
+				'OpenRouter API key is not set. Add it under Settings → Models.'
 			);
 		}
 		const llm = createOpenRouterProvider({
