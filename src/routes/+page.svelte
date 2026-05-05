@@ -10,6 +10,31 @@
 	const openrouterKeyAvailable = $derived(data.openrouterKeyAvailable);
 
 	let runningTopicId = $state<string | null>(null);
+	let openMenuTopicId = $state<string | null>(null);
+	let pendingDeleteTopic = $state<{ id: string; name: string } | null>(null);
+	let topicDeleteDialog: HTMLDialogElement | null = $state(null);
+	let topicConfirmInput: HTMLInputElement | null = $state(null);
+	let topicConfirmTyped = $state('');
+	const topicConfirmMatches = $derived(
+		pendingDeleteTopic ? topicConfirmTyped === pendingDeleteTopic.name : false
+	);
+
+	function toggleMenu(topicId: string) {
+		openMenuTopicId = openMenuTopicId === topicId ? null : topicId;
+	}
+
+	function openTopicDelete(id: string, name: string) {
+		pendingDeleteTopic = { id, name };
+		topicConfirmTyped = '';
+		openMenuTopicId = null;
+		topicDeleteDialog?.showModal();
+		setTimeout(() => topicConfirmInput?.focus(), 0);
+	}
+
+	function closeTopicDelete() {
+		topicDeleteDialog?.close();
+		pendingDeleteTopic = null;
+	}
 </script>
 
 {#if !project}
@@ -93,17 +118,15 @@
 			</div>
 
 			<div class="flex items-center gap-2.5">
-				<button
-					type="button"
+				<a
+					href="/topics/new"
 					class="flex items-center gap-1.5 rounded-lg border border-border bg-card-bg px-3.5 py-2.5 text-sm font-medium text-dusk hover:bg-cloud"
-					title="Topic creation lands with the briefing-card slice"
-					disabled
 				>
 					<svg viewBox="0 0 14 14" class="h-3.5 w-3.5" aria-hidden="true">
 						<path d="M7 3v8M3 7h8" stroke="currentColor" stroke-width="1.5" fill="none" />
 					</svg>
 					New topic
-				</button>
+				</a>
 				{#if stats!.pendingReports > 0}
 					<button
 						type="button"
@@ -169,7 +192,7 @@
 		{:else}
 			<div class="grid grid-cols-2 gap-3.5">
 				{#each topics as topic (topic.id)}
-					<div class="flex flex-col gap-3 rounded-xl border border-border bg-card-bg p-5">
+					<div class="relative flex flex-col gap-3 rounded-xl border border-border bg-card-bg p-5">
 						<div class="flex items-start justify-between gap-2.5">
 							<a
 								href={`/topics/${topic.id}`}
@@ -177,16 +200,44 @@
 							>
 								{topic.name}
 							</a>
-							{#if topic.pendingReportCount > 0}
-								<span
-									class="rounded-full bg-starlight px-[7px] py-[2px] text-[10px] font-semibold text-midnight"
+							<div class="flex items-center gap-1.5">
+								{#if topic.pendingReportCount > 0}
+									<span
+										class="rounded-full bg-starlight px-[7px] py-[2px] text-[10px] font-semibold text-midnight"
+									>
+										{topic.pendingReportCount === 1
+											? 'report pending'
+											: `${topic.pendingReportCount} reports pending`}
+									</span>
+								{/if}
+								<button
+									type="button"
+									onclick={() => toggleMenu(topic.id)}
+									aria-label="Topic actions"
+									class="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-cloud hover:text-midnight"
 								>
-									{topic.pendingReportCount === 1
-										? 'report pending'
-										: `${topic.pendingReportCount} reports pending`}
-								</span>
-							{/if}
+									<svg viewBox="0 0 12 12" class="h-3 w-3" aria-hidden="true">
+										<circle cx="2.5" cy="6" r="1" fill="currentColor" />
+										<circle cx="6" cy="6" r="1" fill="currentColor" />
+										<circle cx="9.5" cy="6" r="1" fill="currentColor" />
+									</svg>
+								</button>
+							</div>
 						</div>
+
+						{#if openMenuTopicId === topic.id}
+							<div
+								class="absolute right-3 top-12 z-10 flex flex-col rounded-lg border border-border bg-card-bg py-1 shadow-md"
+							>
+								<button
+									type="button"
+									onclick={() => openTopicDelete(topic.id, topic.name)}
+									class="px-3 py-1.5 text-left text-[12px] text-red-thread hover:bg-cloud"
+								>
+									Delete topic
+								</button>
+							</div>
+						{/if}
 
 						{#if topic.narrativeThreads.length > 0}
 							<div class="text-[10px] font-medium tracking-wide text-text-muted">
@@ -227,3 +278,61 @@
 		{/if}
 	</section>
 {/if}
+
+<dialog
+	bind:this={topicDeleteDialog}
+	class="rounded-xl border border-border bg-card-bg p-0 backdrop:bg-midnight/40"
+>
+	{#if pendingDeleteTopic}
+		<form
+			method="POST"
+			action="?/deleteTopic"
+			class="flex w-[460px] max-w-full flex-col gap-4 p-6"
+		>
+			<h2 class="text-[16px] font-semibold text-midnight">
+				Delete topic "{pendingDeleteTopic.name}"?
+			</h2>
+			<div class="flex flex-col gap-2 text-[13px] text-dusk">
+				<p>This permanently removes:</p>
+				<ul class="ml-4 list-disc space-y-0.5 text-[12px]">
+					<li>All sources, seeds, and uploaded files for this topic</li>
+					<li>All workflow runs, agent runs, discovery reports, and signals</li>
+				</ul>
+				<p class="text-red-thread">This cannot be undone.</p>
+			</div>
+
+			<input type="hidden" name="id" value={pendingDeleteTopic.id} />
+			<input type="hidden" name="confirmName" value={topicConfirmTyped} />
+
+			<label class="flex flex-col gap-1.5">
+				<span class="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+					Type the topic name to confirm
+				</span>
+				<input
+					bind:this={topicConfirmInput}
+					type="text"
+					bind:value={topicConfirmTyped}
+					autocomplete="off"
+					class="rounded-md border border-border bg-page-bg px-2 py-1.5 text-sm text-midnight outline-none focus:border-dusk"
+				/>
+			</label>
+
+			<div class="flex items-center justify-end gap-2">
+				<button
+					type="button"
+					onclick={closeTopicDelete}
+					class="rounded-md border border-border px-3 py-1.5 text-sm text-dusk hover:bg-cloud"
+				>
+					Cancel
+				</button>
+				<button
+					type="submit"
+					disabled={!topicConfirmMatches}
+					class="rounded-md bg-red-thread px-3 py-1.5 text-sm font-medium text-cloud hover:opacity-90 disabled:opacity-40"
+				>
+					Delete topic
+				</button>
+			</div>
+		</form>
+	{/if}
+</dialog>

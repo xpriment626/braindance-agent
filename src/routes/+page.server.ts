@@ -26,6 +26,9 @@ import {
 } from '$lib/core/projects/registry';
 import { loadSettings } from '$lib/core/settings/load';
 import { settingsToConfigLayer } from '$lib/core/settings/config-layer';
+import { getTopic, deleteTopicCascade } from '$lib/core/knowledge/topics';
+import { join, dirname } from 'node:path';
+import { rm } from 'node:fs/promises';
 
 const PROJECT_COOKIE = 'braindance_project_id';
 
@@ -195,6 +198,61 @@ export const actions: Actions = {
 		}
 
 		cookies.set(PROJECT_COOKIE, id, COOKIE_OPTS);
+		throw redirect(303, '/');
+	},
+
+	deleteTopic: async ({ request, cookies }: RequestEvent) => {
+		const formData = await request.formData();
+		const topicId = String(formData.get('id') ?? '').trim();
+		const confirmName = String(formData.get('confirmName') ?? '');
+
+		if (!topicId) {
+			return fail(400, {
+				error: { code: 'VALIDATION_TOPIC_ID_EMPTY', message: 'Topic id is required.' }
+			});
+		}
+
+		const { handle } = await getCurrentProject(cookies);
+		if (!handle) {
+			return fail(400, {
+				error: { code: 'VALIDATION_RUN_STATE', message: 'No project — nothing to delete.' }
+			});
+		}
+
+		const topic = await getTopic(handle.db, topicId);
+		if (!topic) {
+			return fail(404, {
+				error: { code: 'VALIDATION_TOPIC_NOT_FOUND', message: 'Topic not found.' }
+			});
+		}
+
+		if (confirmName !== topic.name) {
+			return fail(400, {
+				error: {
+					code: 'VALIDATION_TOPIC_DELETE_CONFIRM',
+					message: 'Typed name does not match.'
+				}
+			});
+		}
+
+		try {
+			const { removedSourcePaths } = await deleteTopicCascade(handle.db, topicId);
+			const filesDir = join(handle.path, 'files');
+			for (const rawPath of removedSourcePaths) {
+				const sourceDir = join(filesDir, dirname(rawPath));
+				try {
+					await rm(sourceDir, { recursive: true, force: true });
+				} catch (err) {
+					console.warn('Failed to cleanup source dir', sourceDir, err);
+				}
+			}
+		} catch (e) {
+			if (isRedirect(e)) throw e;
+			const normalized = normalizeError(e);
+			return fail(500, {
+				error: { code: normalized.code, message: normalized.message }
+			});
+		}
 		throw redirect(303, '/');
 	},
 
