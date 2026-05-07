@@ -33,6 +33,7 @@ function staleSignal(id: string, targetId: string): Signal {
 	return {
 		id,
 		topicId: 'topic-1',
+		discoveryReportId: null,
 		targetType: 'source',
 		targetId,
 		signalType: 'stale',
@@ -49,6 +50,7 @@ function consolidationSignal(id: string, canonicalId: string, supersededIds: str
 	return {
 		id,
 		topicId: 'topic-1',
+		discoveryReportId: null,
 		targetType: 'source',
 		targetId: canonicalId,
 		signalType: 'consolidation',

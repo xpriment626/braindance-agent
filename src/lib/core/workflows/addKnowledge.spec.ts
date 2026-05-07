@@ -133,6 +133,12 @@ describe('addKnowledge workflow', () => {
 		expect(stale?.status).toBe('pending');
 		expect(gap?.status).toBe('pending');
 		expect(gap?.targetType).toBe('thread');
+
+		// Audit signals from add_knowledge are FK-pinned to their parent
+		// discovery_report so Signal Review can scope to the run that produced
+		// them (decision 4 in Phase B spec).
+		expect(stale?.discoveryReportId).toBe(discoveryReportId);
+		expect(gap?.discoveryReportId).toBe(discoveryReportId);
 	});
 
 	it('fails the workflow when discover throws and persists structured error', async () => {

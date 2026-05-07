@@ -87,6 +87,12 @@ export const discoveryReports = sqliteTable('discovery_reports', {
 export const signals = sqliteTable('signals', {
 	id: text('id').primaryKey(),
 	topicId: text('topic_id').notNull(),
+	// Nullable FK → discovery_reports.id. Set for signals raised by the audit
+	// step inside add_knowledge runs (so Signal Review can scope by report).
+	// Null for audit_corpus standalone runs (no parent report) and for any
+	// pre-Phase-B signals the backfill couldn't pin via the workflow_run chain
+	// — those surface only in the KB-wide Maintenance flow.
+	discoveryReportId: text('discovery_report_id'),
 	targetType: text('target_type').notNull(), // "source" | "thread"
 	targetId: text('target_id').notNull(),
 	signalType: text('signal_type').notNull(), // "fresh" | "contested" | "stale" | "retracted" | "gap" | "consolidation"
@@ -179,6 +185,7 @@ export async function initProjectDb(db: Database): Promise<void> {
 	await db.run(sql`CREATE TABLE IF NOT EXISTS signals (
 		id TEXT PRIMARY KEY,
 		topic_id TEXT NOT NULL,
+		discovery_report_id TEXT,
 		target_type TEXT NOT NULL,
 		target_id TEXT NOT NULL,
 		signal_type TEXT NOT NULL,
@@ -189,4 +196,52 @@ export async function initProjectDb(db: Database): Promise<void> {
 		created_at TEXT NOT NULL,
 		resolved_at TEXT
 	)`);
+
+	// Forward-only migration for DBs created before signals.discovery_report_id
+	// existed. SQLite has no `ADD COLUMN IF NOT EXISTS`, so we probe pragma_table_info.
+	await addColumnIfMissing(db, 'signals', 'discovery_report_id', 'TEXT');
+
+	// Backfill: pin existing audit-raised signals to their parent discovery_report
+	// via the `workflow_run_id` chain. Bounds to the audit agent_run's time window
+	// so a signal can't be assigned to a report from a different run that happens
+	// to share the topic. Idempotent — only updates rows where the FK is still null.
+	await db.run(sql`
+		UPDATE signals
+		SET discovery_report_id = (
+			SELECT dr.id
+			FROM discovery_reports dr
+			JOIN agent_runs ar
+				ON ar.workflow_run_id = dr.workflow_run_id
+				AND ar.agent_type = 'audit'
+				AND ar.topic_id = dr.topic_id
+			WHERE dr.topic_id = signals.topic_id
+				AND signals.created_at >= ar.started_at
+				AND (
+					ar.completed_at IS NULL
+					OR signals.created_at <= ar.completed_at
+				)
+			LIMIT 1
+		)
+		WHERE signals.discovery_report_id IS NULL
+			AND signals.raised_by = 'audit'
+	`);
+}
+
+// ─── Migration helpers ────────────────────────────────────
+
+/**
+ * Idempotent `ALTER TABLE … ADD COLUMN`. SQLite/libSQL doesn't support
+ * `IF NOT EXISTS` on ADD COLUMN, so we probe pragma_table_info first.
+ */
+async function addColumnIfMissing(
+	db: Database,
+	table: string,
+	column: string,
+	sqlType: string
+): Promise<void> {
+	const result = await db.run(
+		sql.raw(`SELECT name FROM pragma_table_info('${table}') WHERE name = '${column}'`)
+	);
+	if (result.rows.length > 0) return;
+	await db.run(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${sqlType}`));
 }

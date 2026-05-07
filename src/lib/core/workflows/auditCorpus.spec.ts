@@ -71,6 +71,10 @@ describe('auditCorpus workflow', () => {
 		expect(signals).toHaveLength(1);
 		expect(signals[0].id).toBe(signalIds[0]);
 		expect(signals[0].status).toBe('pending');
+		// audit_corpus standalone runs have no parent discovery_report —
+		// signals stay null-scoped and surface only in KB-wide Maintenance,
+		// never in per-report Signal Review (Phase B spec, decision 3).
+		expect(signals[0].discoveryReportId).toBeNull();
 	});
 
 	it('fails the workflow when audit throws', async () => {

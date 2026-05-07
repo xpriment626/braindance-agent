@@ -18,6 +18,7 @@ export type SignalRaisedBy = 'audit' | 'user';
 export interface Signal {
 	id: string;
 	topicId: string;
+	discoveryReportId: string | null;
 	targetType: SignalTargetType;
 	targetId: string;
 	signalType: SignalType;
@@ -31,6 +32,12 @@ export interface Signal {
 
 export interface CreateSignalInput {
 	topicId: string;
+	/**
+	 * Nullable FK → `discovery_reports.id`. Set when the signal is raised by
+	 * the audit step inside `add_knowledge` so Signal Review can scope to the
+	 * report. Omit (or pass null) for `audit_corpus` standalone runs.
+	 */
+	discoveryReportId?: string | null;
 	targetType: SignalTargetType;
 	targetId: string;
 	signalType: SignalType;
@@ -42,6 +49,7 @@ export interface CreateSignalInput {
 interface SignalRow {
 	id: string;
 	topicId: string;
+	discoveryReportId: string | null;
 	targetType: string;
 	targetId: string;
 	signalType: string;
@@ -57,6 +65,7 @@ function fromRow(row: SignalRow): Signal {
 	return {
 		id: row.id,
 		topicId: row.topicId,
+		discoveryReportId: row.discoveryReportId,
 		targetType: row.targetType as SignalTargetType,
 		targetId: row.targetId,
 		signalType: row.signalType as SignalType,
@@ -73,6 +82,7 @@ export async function createSignal(db: Database, input: CreateSignalInput): Prom
 	const row: SignalRow = {
 		id: generateId(),
 		topicId: input.topicId,
+		discoveryReportId: input.discoveryReportId ?? null,
 		targetType: input.targetType,
 		targetId: input.targetId,
 		signalType: input.signalType,
@@ -106,6 +116,30 @@ export async function listSignalsByTopic(
 
 export async function listApprovedSignals(db: Database, topicId: string): Promise<Signal[]> {
 	return listSignalsByTopic(db, topicId, 'approved');
+}
+
+/**
+ * Signals scoped to a specific discovery_report. Used by Signal Review to show
+ * only the audit findings produced by *this* run's audit step, not pending
+ * signals from prior runs that happened to roll over.
+ *
+ * Filters by `discovery_report_id` directly. Signals with a null FK
+ * (audit_corpus standalone, or pre-Phase-B unmigrated rows) never appear here
+ * — they surface only in the KB-wide Maintenance flow.
+ */
+export async function listSignalsByReport(
+	db: Database,
+	discoveryReportId: string,
+	status?: SignalStatus
+): Promise<Signal[]> {
+	const where = status
+		? and(
+				eq(signals.discoveryReportId, discoveryReportId),
+				eq(signals.status, status)
+			)
+		: eq(signals.discoveryReportId, discoveryReportId);
+	const rows = (await db.select().from(signals).where(where)) as SignalRow[];
+	return rows.map(fromRow);
 }
 
 async function requireSignalWithStatus(

@@ -5,6 +5,7 @@ import {
 	createSignal,
 	getSignal,
 	listSignalsByTopic,
+	listSignalsByReport,
 	listApprovedSignals,
 	approveSignal,
 	dismissSignal,
@@ -178,5 +179,99 @@ describe('signals lifecycle', () => {
 		await applySignal(db, s1.id);
 		const approved = await listApprovedSignals(db, 'topic-a');
 		expect(approved.map((s) => s.id)).toEqual([s2.id]);
+	});
+
+	describe('discoveryReportId scoping', () => {
+		it('createSignal stores discoveryReportId when provided', async () => {
+			const signal = await createSignal(db, {
+				topicId: 'topic-1',
+				discoveryReportId: 'report-1',
+				targetType: 'source',
+				targetId: 'src-1',
+				signalType: 'stale',
+				raisedBy: 'audit'
+			});
+			expect(signal.discoveryReportId).toBe('report-1');
+			const fetched = await getSignal(db, signal.id);
+			expect(fetched?.discoveryReportId).toBe('report-1');
+		});
+
+		it('createSignal defaults discoveryReportId to null when omitted', async () => {
+			const signal = await createSignal(db, {
+				topicId: 'topic-1',
+				targetType: 'source',
+				targetId: 'src-1',
+				signalType: 'stale',
+				raisedBy: 'audit'
+			});
+			expect(signal.discoveryReportId).toBeNull();
+		});
+
+		it('listSignalsByReport returns only signals for that report', async () => {
+			const sA = await createSignal(db, {
+				topicId: 'topic-x',
+				discoveryReportId: 'report-A',
+				targetType: 'source',
+				targetId: 'src-1',
+				signalType: 'stale',
+				raisedBy: 'audit'
+			});
+			await createSignal(db, {
+				topicId: 'topic-x',
+				discoveryReportId: 'report-B',
+				targetType: 'source',
+				targetId: 'src-2',
+				signalType: 'contested',
+				raisedBy: 'audit'
+			});
+			// audit_corpus standalone signal — no parent report.
+			await createSignal(db, {
+				topicId: 'topic-x',
+				targetType: 'source',
+				targetId: 'src-3',
+				signalType: 'gap',
+				raisedBy: 'audit'
+			});
+			const reportA = await listSignalsByReport(db, 'report-A');
+			expect(reportA).toHaveLength(1);
+			expect(reportA[0].id).toBe(sA.id);
+		});
+
+		it('listSignalsByReport filters by status when provided', async () => {
+			const s1 = await createSignal(db, {
+				topicId: 'topic-x',
+				discoveryReportId: 'report-1',
+				targetType: 'source',
+				targetId: 'src-1',
+				signalType: 'stale',
+				raisedBy: 'audit'
+			});
+			await createSignal(db, {
+				topicId: 'topic-x',
+				discoveryReportId: 'report-1',
+				targetType: 'source',
+				targetId: 'src-2',
+				signalType: 'contested',
+				raisedBy: 'audit'
+			});
+			await approveSignal(db, s1.id);
+			const pending = await listSignalsByReport(db, 'report-1', 'pending');
+			expect(pending).toHaveLength(1);
+			const approved = await listSignalsByReport(db, 'report-1', 'approved');
+			expect(approved).toHaveLength(1);
+			expect(approved[0].id).toBe(s1.id);
+		});
+
+		it('listSignalsByReport excludes null-FK (audit_corpus standalone) signals', async () => {
+			await createSignal(db, {
+				topicId: 'topic-y',
+				targetType: 'source',
+				targetId: 'src-orphan',
+				signalType: 'gap',
+				raisedBy: 'audit'
+			});
+			const results = await listSignalsByReport(db, 'report-nonexistent');
+			expect(results).toEqual([]);
+		});
 	});
 });

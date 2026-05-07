@@ -118,7 +118,9 @@ export async function addKnowledge(
 			auditFindings: auditOutput as unknown as Record<string, unknown>
 		});
 
-		await persistAuditSignals(db, topicId, auditOutput);
+		// Tie audit signals to their parent discovery_report so Signal Review
+		// can scope to the run that produced them (decision 4).
+		await persistAuditSignals(db, topicId, auditOutput, report.id);
 		await stageWorkflowRun(db, run.id);
 
 		return { workflowRunId: run.id, discoveryReportId: report.id };
