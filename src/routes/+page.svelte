@@ -127,24 +127,8 @@
 					</svg>
 					New topic
 				</a>
-				{#if stats!.pendingReports > 0}
-					<button
-						type="button"
-						class="flex items-center gap-1.5 rounded-lg bg-midnight px-3.5 py-2.5 text-sm font-medium text-cloud"
-						title="Signal Review lands in the next slice"
-						disabled
-					>
-						<svg viewBox="0 0 14 14" class="h-3.5 w-3.5 text-starlight" aria-hidden="true">
-							<path
-								d="M3 7l2.5 2.5L11 4"
-								stroke="currentColor"
-								stroke-width="1.5"
-								fill="none"
-							/>
-						</svg>
-						Review pending
-					</button>
-				{/if}
+				<!-- Per-topic-card badges are the canonical "review this" affordance.
+					 No project-level Review pending CTA — Phase B spec decision 27. -->
 			</div>
 		</header>
 
@@ -202,13 +186,14 @@
 							</a>
 							<div class="flex items-center gap-1.5">
 								{#if topic.pendingReportCount > 0}
-									<span
-										class="rounded-full bg-starlight px-[7px] py-[2px] text-[10px] font-semibold text-midnight"
+									<a
+										href={`/topics/${topic.id}`}
+										class="rounded-full bg-starlight px-[7px] py-[2px] text-[10px] font-semibold text-midnight hover:opacity-80"
 									>
 										{topic.pendingReportCount === 1
 											? 'report pending'
 											: `${topic.pendingReportCount} reports pending`}
-									</span>
+									</a>
 								{/if}
 								<button
 									type="button"
