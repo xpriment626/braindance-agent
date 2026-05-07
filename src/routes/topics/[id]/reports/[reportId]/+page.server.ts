@@ -18,6 +18,14 @@ import {
 	acceptDiscoveredSource,
 	declineDiscoveredSource
 } from '$lib/core/workflows/promoteDiscoveredSource';
+import { pruneCorpus } from '$lib/core/workflows/pruneCorpus';
+import { resolveConfigDir, resolveDataDir, getPlatformInfo } from '$lib/core/paths';
+import { loadConfig } from '$lib/core/config/load';
+import { resolveConfig } from '$lib/core/config/resolve';
+import { buildRuntime } from '$lib/core/runtime';
+import { openRegistry } from '$lib/core/projects/project';
+import { loadSettings } from '$lib/core/settings/load';
+import { settingsToConfigLayer } from '$lib/core/settings/config-layer';
 import { ValidationError } from '$lib/core/errors/types';
 import { normalizeError } from '$lib/core/errors/normalize';
 
@@ -215,6 +223,60 @@ export const actions: Actions = {
 		try {
 			await dismissDiscoveryReport(handle.db, String(params.reportId ?? ''));
 			return { ok: true };
+		} catch (e) {
+			return failFrom(e);
+		}
+	},
+
+	applyApprovedSignals: async ({ cookies, params }: RequestEvent) => {
+		const { handle } = await getCurrentProject(cookies);
+		if (!handle) {
+			return fail(400, { error: { code: 'VALIDATION_RUN_STATE', message: 'no active project' } });
+		}
+		const topicId = String(params.id ?? '');
+		const reportId = String(params.reportId ?? '');
+
+		// Authoritative server-side fetch — don't trust client list. Bounded
+		// by the FK so prune only touches signals from this report (per Phase
+		// B canvas spec; KB-wide prune is the dedicated Maintenance surface).
+		const approved = await listSignalsByReport(handle.db, reportId, 'approved');
+		if (approved.length === 0) {
+			return fail(400, {
+				error: {
+					code: 'VALIDATION_RUN_STATE',
+					message: 'no approved signals to apply'
+				}
+			});
+		}
+
+		try {
+			const dataDir = resolveDataDir(getPlatformInfo());
+			const registry = await openRegistry(dataDir);
+			const settings = await loadSettings(registry);
+			const userConfig = await loadConfig(resolveConfigDir(getPlatformInfo()));
+			const resolved = resolveConfig({
+				user: userConfig,
+				settings: settingsToConfigLayer(settings)
+			});
+			const runtime = await buildRuntime(resolved);
+			try {
+				const result = await pruneCorpus(
+					handle.db,
+					topicId,
+					approved.map((s) => s.id),
+					{ llm: runtime.llm, config: {} }
+				);
+				return {
+					ok: true as const,
+					prune: {
+						summary: result.log.summary,
+						appliedMutations: result.log.appliedMutations,
+						attemptedCount: approved.length
+					}
+				};
+			} finally {
+				await runtime.cleanup();
+			}
 		} catch (e) {
 			return failFrom(e);
 		}

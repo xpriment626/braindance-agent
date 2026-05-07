@@ -19,6 +19,12 @@
 	);
 
 	let busyAction = $state<string | null>(null); // form key used to disable rows during in-flight enhance.
+	let pruning = $state(false);
+
+	// Mutation log surfaces only on the action result; refreshing the page or
+	// navigating away clears it (the underlying signal state is now applied,
+	// rendered via the regular signals list).
+	const pruneResult = $derived(form && 'prune' in form ? form.prune : null);
 
 	function runLabel(createdAt: string): string {
 		const d = new Date(createdAt);
@@ -224,23 +230,61 @@
 				{/if}
 			</div>
 
-			<!-- SIGNALS PANEL -->
+			<!-- SIGNALS PANEL — replaced by mutation log after a successful prune. -->
 			<div class="flex flex-col gap-3 rounded-xl border border-border bg-card-bg p-5">
-				<div class="flex items-baseline gap-2">
-					<h2 class="text-[11px] font-medium uppercase tracking-wider text-text-muted">
-						Signals
-					</h2>
-					<span class="text-[10px] font-medium tracking-wider text-text-muted">
-						· {counts.signalsApproved} approved · {counts.signalsDismissed} dismissed · {counts.signalsPending} pending
-					</span>
-				</div>
-
-				{#if signals.length === 0}
-					<p class="rounded-lg border border-dashed border-border px-4 py-5 text-[12px] leading-relaxed text-text-muted">
-						No audit findings this run.
-					</p>
+				{#if pruneResult}
+					<div class="flex items-baseline gap-2">
+						<h2 class="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+							Prune log
+						</h2>
+						<span class="text-[10px] font-medium tracking-wider text-text-muted">
+							· {pruneResult.appliedMutations.length} of {pruneResult.attemptedCount} applied
+						</span>
+					</div>
+					{#if pruneResult.summary}
+						<p class="text-[12px] leading-relaxed text-dusk">
+							{pruneResult.summary}
+						</p>
+					{/if}
+					{#if pruneResult.appliedMutations.length === 0}
+						<p class="rounded-lg border border-dashed border-border px-4 py-5 text-[12px] leading-relaxed text-text-muted">
+							No mutations were applied. Approved signals remain pending — try again.
+						</p>
+					{:else}
+						<ul class="flex flex-col gap-2">
+							{#each pruneResult.appliedMutations as mutation (mutation.signalId)}
+								<li class="flex items-start gap-2 rounded-lg border border-border bg-page-bg p-3">
+									<span class="text-[14px] leading-none text-midnight" aria-hidden="true">
+										{mutation.action === 'delete_source' ? '✕' : '⇢'}
+									</span>
+									<div class="flex flex-col gap-0.5">
+										<span class="text-[12px] font-medium text-midnight">
+											{mutation.action === 'delete_source' ? 'Deleted source' : 'Marked consolidated'}
+										</span>
+										<span class="font-mono text-[10px] text-text-muted">
+											signal {mutation.signalId}
+										</span>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				{:else}
-					<ul class="flex flex-col gap-2.5">
+					<div class="flex items-baseline gap-2">
+						<h2 class="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+							Signals
+						</h2>
+						<span class="text-[10px] font-medium tracking-wider text-text-muted">
+							· {counts.signalsApproved} approved · {counts.signalsDismissed} dismissed · {counts.signalsPending} pending
+						</span>
+					</div>
+
+					{#if signals.length === 0}
+						<p class="rounded-lg border border-dashed border-border px-4 py-5 text-[12px] leading-relaxed text-text-muted">
+							No audit findings this run.
+						</p>
+					{:else}
+						<ul class="flex flex-col gap-2.5">
 						{#each signals as signal (signal.id)}
 							<li
 								class="flex flex-col gap-1.5 rounded-lg border border-border bg-page-bg p-3"
@@ -315,6 +359,7 @@
 							</li>
 						{/each}
 					</ul>
+					{/if}
 				{/if}
 			</div>
 		</div>
@@ -330,8 +375,13 @@
 				▣ {counts.signalsApproved} signals approved · {counts.signalsDismissed} dismissed · {counts.signalsPending} pending
 			</span>
 		</div>
-		<div class="flex items-center gap-2">
-			{#if isTerminal}
+		<div class="flex items-center gap-3">
+			{#if pruning}
+				<span class="text-[11px] font-medium text-dusk">
+					Pruning is in progress. Please don't close this tab.
+				</span>
+			{/if}
+			{#if isTerminal || pruneResult}
 				<a
 					href={`/topics/${topic.id}`}
 					class="rounded-md bg-midnight px-3.5 py-2 text-sm font-medium text-cloud hover:opacity-90"
@@ -343,20 +393,36 @@
 					<form method="POST" action="?/dismissReport">
 						<button
 							type="submit"
-							class="rounded-md border border-border px-3.5 py-2 text-sm text-dusk hover:bg-cloud"
+							disabled={pruning || busyAction !== null}
+							class="rounded-md border border-border px-3.5 py-2 text-sm text-dusk hover:bg-cloud disabled:opacity-40"
 						>
 							Dismiss report
 						</button>
 					</form>
 				{/if}
-				<button
-					type="button"
-					disabled
-					title="Per-report prune wires up in the next commit"
-					class="rounded-md bg-midnight px-3.5 py-2 text-sm font-medium text-cloud opacity-40"
+				<form
+					method="POST"
+					action="?/applyApprovedSignals"
+					use:enhance={() => {
+						pruning = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							pruning = false;
+						};
+					}}
 				>
-					Apply {counts.signalsApproved} approved signals → prune
-				</button>
+					<button
+						type="submit"
+						disabled={pruning || busyAction !== null || counts.signalsApproved === 0}
+						class="rounded-md bg-midnight px-3.5 py-2 text-sm font-medium text-cloud hover:opacity-90 disabled:opacity-40"
+					>
+						{#if pruning}
+							Pruning {counts.signalsApproved} signals…
+						{:else}
+							Apply {counts.signalsApproved} approved signals → prune
+						{/if}
+					</button>
+				</form>
 			{/if}
 		</div>
 	</div>
