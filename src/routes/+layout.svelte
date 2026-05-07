@@ -15,6 +15,8 @@
 	let confirmTyped = $state('');
 	const confirmMatches = $derived(project ? confirmTyped === project.name : false);
 
+	let createDetails: HTMLDetailsElement | null = $state(null);
+
 	function openDelete() {
 		confirmTyped = '';
 		deleteDialog?.showModal();
@@ -26,11 +28,27 @@
 		deleteDialog?.close();
 	}
 
+	function closeCreate() {
+		if (createDetails) createDetails.open = false;
+	}
+
 	function onPickerChange(e: Event) {
 		const form = (e.currentTarget as HTMLSelectElement).form;
 		form?.requestSubmit();
 	}
+
+	// Close the inline create-project reveal when the user clicks anywhere
+	// outside it. Native <details> doesn't do this on its own; the contains()
+	// check guards against the summary toggle firing immediately after.
+	function onWindowClick(e: MouseEvent) {
+		if (!createDetails || !createDetails.open) return;
+		const target = e.target as Node;
+		if (createDetails.contains(target)) return;
+		createDetails.open = false;
+	}
 </script>
+
+<svelte:window onclick={onWindowClick} />
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
@@ -88,7 +106,7 @@
 			</nav>
 
 			<div class="border-t border-border px-5 py-3">
-				<details class="group">
+				<details bind:this={createDetails} class="group">
 					<summary
 						class="flex cursor-pointer list-none items-center gap-1.5 text-[12px] text-dusk hover:text-midnight"
 					>
@@ -107,14 +125,31 @@
 						action="/?/createProject"
 						class="mt-2 flex flex-col gap-1.5"
 					>
-						<input
-							type="text"
-							name="name"
-							required
-							maxlength="64"
-							placeholder="Project name"
-							class="rounded-md border border-border bg-page-bg px-2 py-1.5 text-sm text-midnight outline-none focus:border-dusk"
-						/>
+						<div class="flex items-center gap-1.5">
+							<input
+								type="text"
+								name="name"
+								required
+								maxlength="64"
+								placeholder="Project name"
+								class="flex-1 rounded-md border border-border bg-page-bg px-2 py-1.5 text-sm text-midnight outline-none focus:border-dusk"
+							/>
+							<button
+								type="button"
+								onclick={closeCreate}
+								aria-label="Cancel"
+								class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-cloud hover:text-midnight"
+							>
+								<svg viewBox="0 0 12 12" class="h-3 w-3" aria-hidden="true">
+									<path
+										d="M3 3l6 6M9 3l-6 6"
+										stroke="currentColor"
+										stroke-width="1.25"
+										fill="none"
+									/>
+								</svg>
+							</button>
+						</div>
 						<button
 							type="submit"
 							class="rounded-md bg-midnight px-2.5 py-1.5 text-[12px] font-medium text-cloud hover:opacity-90"

@@ -144,40 +144,22 @@
 
 			<!-- SOURCES QUEUE -->
 			<div class="flex flex-col gap-4 rounded-xl border border-border bg-card-bg p-6">
-				<div class="flex items-center justify-between">
+				<div class="flex items-baseline gap-2">
 					<h2
 						class="text-[11px] font-medium uppercase tracking-wider text-text-muted"
 					>
 						Sources queue
 					</h2>
-					<div class="flex items-center gap-1.5">
-						<button
-							type="button"
-							onclick={addText}
-							class="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-dusk hover:bg-cloud"
-						>
-							+ Text
-						</button>
-						<button
-							type="button"
-							onclick={addUrl}
-							class="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-dusk hover:bg-cloud"
-						>
-							+ URL
-						</button>
-						<button
-							type="button"
-							onclick={addFile}
-							class="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-dusk hover:bg-cloud"
-						>
-							+ File
-						</button>
-					</div>
+					<span class="text-[10px] font-medium tracking-wider text-text-muted">
+						· Optional
+					</span>
 				</div>
 
 				{#if inputs.length === 0}
-					<p class="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[12px] text-text-muted">
-						No sources yet — add them above. You can also create the topic empty and add sources later.
+					<p class="rounded-lg border border-dashed border-border px-4 py-5 text-[12px] leading-relaxed text-text-muted">
+						Skip this if you'd rather give the agent topic context only and let
+						it discover sources for you. Or add starter sources below to seed
+						the search.
 					</p>
 				{:else}
 					<ul class="flex flex-col gap-2">
@@ -242,6 +224,37 @@
 						{/each}
 					</ul>
 				{/if}
+
+				<div
+					class="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2"
+				>
+					<span class="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+						{inputs.length === 0 ? 'Add a source' : 'Add another'}
+					</span>
+					<div class="ml-auto flex items-center gap-1.5">
+						<button
+							type="button"
+							onclick={addText}
+							class="rounded-md border border-border bg-card-bg px-2.5 py-1 text-[11px] font-medium text-dusk hover:bg-cloud"
+						>
+							+ Text
+						</button>
+						<button
+							type="button"
+							onclick={addUrl}
+							class="rounded-md border border-border bg-card-bg px-2.5 py-1 text-[11px] font-medium text-dusk hover:bg-cloud"
+						>
+							+ URL
+						</button>
+						<button
+							type="button"
+							onclick={addFile}
+							class="rounded-md border border-border bg-card-bg px-2.5 py-1 text-[11px] font-medium text-dusk hover:bg-cloud"
+						>
+							+ File
+						</button>
+					</div>
+				</div>
 			</div>
 		</div>
 
