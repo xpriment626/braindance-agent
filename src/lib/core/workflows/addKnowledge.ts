@@ -8,11 +8,13 @@ import { runDiscover } from '../agents/discover';
 import { runAudit } from '../agents/audit';
 import {
 	createDiscoveryReport,
+	dismissDiscoveryReport,
 	type DiscoveredSourceProposal
 } from '../knowledge/discovery-reports';
 import {
 	createWorkflowRun,
 	stageWorkflowRun,
+	completeWorkflowRun,
 	failWorkflowRun
 } from './runs';
 import { persistAuditSignals } from './persistAuditSignals';
@@ -120,8 +122,23 @@ export async function addKnowledge(
 
 		// Tie audit signals to their parent discovery_report so Signal Review
 		// can scope to the run that produced them (decision 4).
-		await persistAuditSignals(db, topicId, auditOutput, report.id);
-		await stageWorkflowRun(db, run.id);
+		const persistedSignalIds = await persistAuditSignals(
+			db,
+			topicId,
+			auditOutput,
+			report.id
+		);
+
+		// B.3: auto-dismiss empty reports so the inbox doesn't strand them
+		// (and openDiscoveryReportForReview doesn't throw on zero proposals).
+		// Workflow_run goes directly running → completed; there's nothing to
+		// stage for review. The report carries the "dismissed" outcome.
+		if (newSources.length === 0 && persistedSignalIds.length === 0) {
+			await dismissDiscoveryReport(db, report.id);
+			await completeWorkflowRun(db, run.id);
+		} else {
+			await stageWorkflowRun(db, run.id);
+		}
 
 		return { workflowRunId: run.id, discoveryReportId: report.id };
 	} catch (error) {

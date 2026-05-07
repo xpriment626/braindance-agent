@@ -185,4 +185,158 @@ describe('addKnowledge workflow', () => {
 			})
 		).rejects.toThrow(/topic/);
 	});
+
+	describe('empty report auto-dismiss (B.3)', () => {
+		// Discover enforces a 2-distinct-search floor before accepting empty
+		// report_findings (the K2.6 anti-empty rule). Mocks must issue at least
+		// two searches before reporting empty.
+		function emptyResultLLM(): LLMProvider {
+			return createMockProvider(
+				toolCallResponse([
+					{ id: 's1', name: 'search_web', input: { query: 'agents alpha' } }
+				]),
+				toolCallResponse([
+					{ id: 's2', name: 'search_web', input: { query: 'agents beta' } }
+				]),
+				toolCallResponse([
+					{
+						id: 'r',
+						name: 'report_findings',
+						input: { discoveredSources: [], searchSummary: 'no relevant results' }
+					}
+				]),
+				// Audit: submit empty across the board.
+				toolCallResponse([
+					{
+						id: 'a',
+						name: 'submit_audit',
+						input: {
+							freshnessFlags: [],
+							contradictions: [],
+							gapAnalysis: [],
+							consolidationSuggestions: [],
+							summary: 'corpus is healthy, no findings'
+						}
+					}
+				])
+			);
+		}
+
+		it('auto-dismisses report when both proposals and signals are empty', async () => {
+			const { workflowRunId, discoveryReportId } = await addKnowledge(db, topicId, {
+				llm: emptyResultLLM(),
+				channels: [mockWebChannel()],
+				config: { channels: { web: { enabled: true } } }
+			});
+
+			const report = await getDiscoveryReport(db, discoveryReportId);
+			expect(report?.status).toBe('dismissed');
+			expect(report?.reviewedAt).toBeTruthy();
+			expect(report?.newSources).toHaveLength(0);
+
+			// Workflow_run goes directly to completed, skipping the staged-for-review state.
+			const run = await getWorkflowRun(db, workflowRunId);
+			expect(run?.status).toBe('completed');
+			expect(run?.completedAt).toBeTruthy();
+
+			const signals = await listSignalsByTopic(db, topicId);
+			expect(signals).toHaveLength(0);
+		});
+
+		it('still stages for review when proposals exist but signals are empty', async () => {
+			const llm = createMockProvider(
+				toolCallResponse([
+					{ id: 'c1', name: 'search_web', input: { query: 'agents' } }
+				]),
+				toolCallResponse([
+					{ id: 'c2', name: 'extract_web', input: { url: 'https://example.com/a' } }
+				]),
+				toolCallResponse([
+					{
+						id: 'c3',
+						name: 'report_findings',
+						input: {
+							discoveredSources: [
+								{
+									url: 'https://example.com/a',
+									title: 'A',
+									relevanceRationale: 'on topic',
+									confidence: 0.8,
+									threadAssociations: ['agents'],
+									scope: 'on_thread'
+								}
+							],
+							searchSummary: 'one result'
+						}
+					}
+				]),
+				toolCallResponse([
+					{
+						id: 'c4',
+						name: 'submit_audit',
+						input: {
+							freshnessFlags: [],
+							contradictions: [],
+							gapAnalysis: [],
+							consolidationSuggestions: [],
+							summary: 'corpus is healthy'
+						}
+					}
+				])
+			);
+			const { workflowRunId, discoveryReportId } = await addKnowledge(db, topicId, {
+				llm,
+				channels: [mockWebChannel()],
+				config: { channels: { web: { enabled: true } } }
+			});
+			const report = await getDiscoveryReport(db, discoveryReportId);
+			expect(report?.status).toBe('pending');
+			const run = await getWorkflowRun(db, workflowRunId);
+			expect(run?.status).toBe('staged');
+		});
+
+		it('still stages for review when signals exist but proposals are empty', async () => {
+			await seedExistingSource(db, topicId);
+			// Two searches before empty report_findings, per the discover floor.
+			const llm = createMockProvider(
+				toolCallResponse([
+					{ id: 's1', name: 'search_web', input: { query: 'agents alpha' } }
+				]),
+				toolCallResponse([
+					{ id: 's2', name: 'search_web', input: { query: 'agents beta' } }
+				]),
+				toolCallResponse([
+					{
+						id: 'r',
+						name: 'report_findings',
+						input: { discoveredSources: [], searchSummary: 'nothing new' }
+					}
+				]),
+				toolCallResponse([
+					{
+						id: 'a',
+						name: 'submit_audit',
+						input: {
+							freshnessFlags: [
+								{ targetId: 'src-existing', signalType: 'stale', reason: 'old' }
+							],
+							contradictions: [],
+							gapAnalysis: [],
+							consolidationSuggestions: [],
+							summary: 'one stale source'
+						}
+					}
+				])
+			);
+			const { workflowRunId, discoveryReportId } = await addKnowledge(db, topicId, {
+				llm,
+				channels: [mockWebChannel()],
+				config: { channels: { web: { enabled: true } } }
+			});
+			const report = await getDiscoveryReport(db, discoveryReportId);
+			expect(report?.status).toBe('pending');
+			const run = await getWorkflowRun(db, workflowRunId);
+			expect(run?.status).toBe('staged');
+		});
+	});
 });
